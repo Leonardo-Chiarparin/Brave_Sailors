@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Brave_SailorsTheme {
-                MenuScreen()
+                ProfileScreen()
             }
         }
     }
