@@ -60,16 +60,16 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import com.example.brave_sailors.ui.theme.*
 
-// --- MODIFICATO: Usiamo una classe 'Flag' per contenere sia l'ID che il nome ---
+// --- CHANGED: Using a 'Flag' class to hold both the ID and the name ---
 data class Flag(val name: String, val resourceId: Int)
 
-// --- MODIFICATO: Lista di oggetti Flag ---
-// Assicurati di avere queste risorse in res/drawable (es. flag_italy.png)
+// --- CHANGED: List of Flag objects ---
+// Make sure you have these resources in res/drawable (e.g., flag_italy.png)
 val availableFlags = listOf(
     Flag("Italy", R.drawable.flag_italy),
     Flag("Spain", R.drawable.flag_spain),
     Flag("France", R.drawable.flag_france),
-    // Aggiungi altre bandiere qui...
+    // Add more flags here...
     // Flag("Germany", R.drawable.flag_germany),
 )
 
@@ -78,11 +78,11 @@ fun ProfileScreen() {
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val barHeight = screenHeight * 0.12f
 
-    // --- MODIFICATO: Stati per gestire il dialog e la bandiera selezionata ---
+    // --- CHANGED: States to manage the dialog and the selected flag ---
     var showFlagDialog by remember { mutableStateOf(false) }
     var selectedFlag by remember { mutableStateOf(availableFlags.first()) }
 
-    // --- NUOVO: Mostra il dialog personalizzato quando lo stato è true ---
+    // --- NEW: Show the custom dialog when the state is true ---
     if (showFlagDialog) {
         FlagSelectionDialog(
             onDismiss = { showFlagDialog = false },
@@ -176,11 +176,11 @@ fun ProfileScreen() {
                             colorFilter = ColorFilter.tint(TextWhite)
                         )
                     }
-                    // --- MODIFICATO: Il box apre il dialog e mostra l'immagine della bandiera ---
+                    // --- CHANGED: The box opens the dialog and shows the flag image ---
                     ProfileCustomizationItem(
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { showFlagDialog = true }, // Apri il dialog al click
+                            .clickable { showFlagDialog = true }, // Open the dialog on click
                         title = "Flag"
                     ) {
                         Image(
@@ -188,7 +188,7 @@ fun ProfileScreen() {
                             contentDescription = selectedFlag.name,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(16.dp), // Aggiungi padding per non far toccare i bordi
+                                .padding(16.dp), // Add padding to prevent touching the edges
                             contentScale = ContentScale.Crop
                         )
                     }
@@ -236,21 +236,20 @@ fun ProfileScreen() {
     }
 }
 
-// --- NUOVO: Composable per il Dialog di selezione bandiera, con lo stile richiesto ---
 @Composable
 fun FlagSelectionDialog(onDismiss: () -> Unit, onFlagSelected: (Flag) -> Unit) {
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false) // Permette larghezza personalizzata
+        properties = DialogProperties(usePlatformDefaultWidth = false) // Allows custom width
     ) {
-        // Usiamo la stessa forma e colore dei bottoni "Portrait" / "Flag"
+        // We use the same shape and color as the "Portrait" / "Flag" buttons
         val dialogShape = CutCornerShape(12.dp)
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 32.dp) // Uguale al padding della colonna principale
+                .padding(horizontal = 32.dp) // Same as the main column's padding
                 .drawBehind {
-                    // Disegniamo lo stesso bordo con gradiente dei bottoni
+                    // We draw the same gradient border as the buttons
                     val strokeWidth = 1.dp.toPx()
                     val cornerSizePx = 12.dp.toPx()
                     val brush = Brush.verticalGradient(
@@ -266,10 +265,10 @@ fun FlagSelectionDialog(onDismiss: () -> Unit, onFlagSelected: (Flag) -> Unit) {
                     )
                 },
             shape = dialogShape,
-            color = DeepBlue // Stesso sfondo dei bottoni
+            color = DeepBlue // Same background as the buttons
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                // Header del Dialog con titolo e pulsante di chiusura
+                // Dialog Header with title and close button
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -283,7 +282,7 @@ fun FlagSelectionDialog(onDismiss: () -> Unit, onFlagSelected: (Flag) -> Unit) {
                     }
                 }
 
-                // Lista scrollabile di bandiere
+                // Scrollable list of flags
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -303,8 +302,8 @@ fun FlagSelectionDialog(onDismiss: () -> Unit, onFlagSelected: (Flag) -> Unit) {
                                 painter = painterResource(id = flag.resourceId),
                                 contentDescription = flag.name,
                                 modifier = Modifier
-                                    .size(width = 60.dp, height = 40.dp) // Dimensioni fisse per la bandiera
-                                    .border(1.dp, Color.Gray.copy(alpha = 0.5f)), // Piccolo bordo opzionale
+                                    .size(width = 60.dp, height = 40.dp) // Fixed size for the flag
+                                    .border(1.dp, Color.Gray.copy(alpha = 0.5f)), // Optional small border
                                 contentScale = ContentScale.Crop
                             )
                             Spacer(modifier = Modifier.width(16.dp))
@@ -402,12 +401,12 @@ fun ProfileScreenPreview() {
     }
 }
 
-// --- NUOVO: Aggiunta una preview per il dialog per facilitare lo sviluppo ---
+
 @Preview
 @Composable
 fun FlagSelectionDialogPreview() {
     Brave_SailorsTheme {
-        // Sfondo scuro per simulare come appare sopra l'app
+        // Dark background to simulate how it appears over the app
         Box(
             Modifier
                 .fillMaxSize()
