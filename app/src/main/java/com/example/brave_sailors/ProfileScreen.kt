@@ -2,11 +2,13 @@ package com.example.brave_sailors
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,19 +17,27 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -37,18 +47,51 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
-import com.example.brave_sailors.ui.theme.Brave_SailorsTheme
+import com.example.brave_sailors.ui.theme.*
+
+// --- MODIFICATO: Usiamo una classe 'Flag' per contenere sia l'ID che il nome ---
+data class Flag(val name: String, val resourceId: Int)
+
+// --- MODIFICATO: Lista di oggetti Flag ---
+// Assicurati di avere queste risorse in res/drawable (es. flag_italy.png)
+val availableFlags = listOf(
+    Flag("Italy", R.drawable.flag_italy),
+    Flag("Spain", R.drawable.flag_spain),
+    Flag("France", R.drawable.flag_france),
+    // Aggiungi altre bandiere qui...
+    // Flag("Germany", R.drawable.flag_germany),
+)
 
 @Composable
 fun ProfileScreen() {
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val barHeight = screenHeight * 0.12f
+
+    // --- MODIFICATO: Stati per gestire il dialog e la bandiera selezionata ---
+    var showFlagDialog by remember { mutableStateOf(false) }
+    var selectedFlag by remember { mutableStateOf(availableFlags.first()) }
+
+    // --- NUOVO: Mostra il dialog personalizzato quando lo stato è true ---
+    if (showFlagDialog) {
+        FlagSelectionDialog(
+            onDismiss = { showFlagDialog = false },
+            onFlagSelected = { flag ->
+                selectedFlag = flag
+                showFlagDialog = false
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -133,13 +176,20 @@ fun ProfileScreen() {
                             colorFilter = ColorFilter.tint(TextWhite)
                         )
                     }
-                    ProfileCustomizationItem(modifier = Modifier.weight(1f), title = "Flag") {
-                        // Placeholder for flag
-                        Box(
+                    // --- MODIFICATO: Il box apre il dialog e mostra l'immagine della bandiera ---
+                    ProfileCustomizationItem(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { showFlagDialog = true }, // Apri il dialog al click
+                        title = "Flag"
+                    ) {
+                        Image(
+                            painter = painterResource(id = selectedFlag.resourceId),
+                            contentDescription = selectedFlag.name,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(16.dp)
-                                .background(Color.White)
+                                .padding(16.dp), // Aggiungi padding per non far toccare i bordi
+                            contentScale = ContentScale.Crop
                         )
                     }
                 }
@@ -163,11 +213,10 @@ fun ProfileScreen() {
                     )
                     ProfileActionButton(
                         modifier = Modifier.weight(1f),
-                        title = "Starting line-up",
+                        title = "Starting line",
                         icon = Icons.Default.ViewModule
                     )
                 }
-
             }
 
             Box(modifier = Modifier.zIndex(2f)) {
@@ -187,11 +236,98 @@ fun ProfileScreen() {
     }
 }
 
+// --- NUOVO: Composable per il Dialog di selezione bandiera, con lo stile richiesto ---
+@Composable
+fun FlagSelectionDialog(onDismiss: () -> Unit, onFlagSelected: (Flag) -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false) // Permette larghezza personalizzata
+    ) {
+        // Usiamo la stessa forma e colore dei bottoni "Portrait" / "Flag"
+        val dialogShape = CutCornerShape(12.dp)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp) // Uguale al padding della colonna principale
+                .drawBehind {
+                    // Disegniamo lo stesso bordo con gradiente dei bottoni
+                    val strokeWidth = 1.dp.toPx()
+                    val cornerSizePx = 12.dp.toPx()
+                    val brush = Brush.verticalGradient(
+                        0.0f to Color.Transparent,
+                        (cornerSizePx / size.height) to TextWhite,
+                        (size.height - cornerSizePx) / size.height to TextWhite,
+                        1.0f to Color.Transparent
+                    )
+                    drawOutline(
+                        outline = dialogShape.createOutline(size, layoutDirection, this),
+                        brush = brush,
+                        style = Stroke(width = strokeWidth)
+                    )
+                },
+            shape = dialogShape,
+            color = DeepBlue // Stesso sfondo dei bottoni
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // Header del Dialog con titolo e pulsante di chiusura
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, top = 8.dp, end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("SELECT FLAG", color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = TextWhite)
+                    }
+                }
+
+                // Lista scrollabile di bandiere
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(availableFlags) { flag ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onFlagSelected(flag) }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Image(
+                                painter = painterResource(id = flag.resourceId),
+                                contentDescription = flag.name,
+                                modifier = Modifier
+                                    .size(width = 60.dp, height = 40.dp) // Dimensioni fisse per la bandiera
+                                    .border(1.dp, Color.Gray.copy(alpha = 0.5f)), // Piccolo bordo opzionale
+                                contentScale = ContentScale.Crop
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(
+                                text = flag.name.uppercase(),
+                                color = TextWhite,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 @Composable
 fun ProfileCustomizationItem(modifier: Modifier = Modifier, title: String, content: @Composable () -> Unit) {
     val buttonShape = CutCornerShape(12.dp)
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(title, color = TextWhite, fontSize = 14.sp)
+        Text(title, color = TextWhite, fontSize = 14.sp, textAlign = TextAlign.Center)
         Spacer(modifier = Modifier.height(4.dp))
         Surface(
             modifier = Modifier
@@ -253,7 +389,7 @@ fun ProfileActionButton(modifier: Modifier = Modifier, title: String, icon: Imag
         ) {
             Icon(icon, contentDescription = title, tint = TextWhite, modifier = Modifier.size(32.dp))
             Spacer(modifier = Modifier.height(4.dp))
-            Text(title, color = TextWhite, fontSize = 14.sp)
+            Text(title, color = TextWhite, fontSize = 14.sp, textAlign = TextAlign.Center)
         }
     }
 }
@@ -263,5 +399,22 @@ fun ProfileActionButton(modifier: Modifier = Modifier, title: String, icon: Imag
 fun ProfileScreenPreview() {
     Brave_SailorsTheme {
         ProfileScreen()
+    }
+}
+
+// --- NUOVO: Aggiunta una preview per il dialog per facilitare lo sviluppo ---
+@Preview
+@Composable
+fun FlagSelectionDialogPreview() {
+    Brave_SailorsTheme {
+        // Sfondo scuro per simulare come appare sopra l'app
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f)),
+            contentAlignment = Alignment.Center
+        ) {
+            FlagSelectionDialog(onDismiss = {}, onFlagSelected = {})
+        }
     }
 }
