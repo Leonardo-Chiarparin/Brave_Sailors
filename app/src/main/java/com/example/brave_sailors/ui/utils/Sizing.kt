@@ -1,6 +1,5 @@
 package com.example.brave_sailors.ui.utils
 
-import android.util.DisplayMetrics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
