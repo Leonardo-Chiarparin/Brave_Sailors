@@ -1,5 +1,6 @@
 package com.example.brave_sailors.ui.components
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -21,9 +22,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -47,24 +50,41 @@ import com.example.brave_sailors.ui.theme.TransparentGrey
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
+@SuppressLint("UnrememberedMutableState")
 @Composable
-fun PrimaryButton(text: String, onClick: () -> Unit) {
+fun PrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    disableEffects: Boolean = false
+) {
     val scale = RememberScaleConversion()
 
+    // Abilitiamo shiny solo se il bottone è abilitato e gli effetti non sono disabilitati
+    val animationEnabled = enabled && !disableEffects
+
+    // Gestione animazione sicura (senza duration = 0)
     val transition = rememberInfiniteTransition(label = "ShinyTransition")
-    val progress by transition.animateFloat(
-        initialValue = -0.4f,
-        targetValue = 1.6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                delayMillis = 5000,
-                durationMillis = 850,
-                easing = LinearEasing
+
+    val progress by if (animationEnabled) {
+        transition.animateFloat(
+            initialValue = -0.4f,
+            targetValue = 1.6f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    delayMillis = 5000,
+                    durationMillis = 850,
+                    easing = LinearEasing
+                ),
+                repeatMode = RepeatMode.Restart
             ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ShinyOffset"
-    )
+            label = "ShinyOffset"
+        )
+    } else {
+        // Valore statico → nessuna animazione → nessun crash
+        mutableStateOf(-0.4f)
+    }
 
     val cutSizeDp = scale.dp(36f)
     val paddingHorizontal = scale.dp(112f)
@@ -72,70 +92,69 @@ fun PrimaryButton(text: String, onClick: () -> Unit) {
 
     val interactionSource = remember { MutableInteractionSource() }
 
-    val bgColor = Orange.copy(alpha = 0.90f)
-    val buttonShape = CutCornerShape(bottomStart = cutSizeDp, bottomEnd = cutSizeDp, topStart = 0.dp, topEnd = 0.dp)
+    val baseBg = Orange.copy(alpha = 0.90f)
+    val bgColor = if (enabled) baseBg else baseBg.copy(alpha = 0.40f)
+
+    val buttonShape = CutCornerShape(
+        bottomStart = cutSizeDp,
+        bottomEnd = cutSizeDp,
+        topStart = 0.dp,
+        topEnd = 0.dp
+    )
 
     Box(
-        modifier = Modifier
+        modifier = modifier
+            .alpha(if (enabled) 1f else 0.5f)
             .clip(buttonShape)
             .border(BorderStroke(scale.dp(1f), LightGrey.copy(alpha = 0.75f)), buttonShape)
             .background(bgColor)
-            .drawBehind {
-                val h = size.height
-                val w = size.width
-
-                val shineWidth = scale.dp(72f).toPx()
-
-                val startX = ( progress * ( w + shineWidth ) ) - shineWidth
-                val endX = startX + shineWidth
-
-                val brush = Brush.linearGradient(
-                    colors = listOf(
-                        White.copy(alpha = 0.0f),
-                        White.copy(alpha = 0.05f),
-                        White.copy(alpha = 0.25f),
-                        White.copy(alpha = 0.30f),
-                        White.copy(alpha = 0.25f),
-                        White.copy(alpha = 0.05f),
-                        White.copy(alpha = 0.0f)
-                    ),
-                    start = Offset(startX, h),
-                    end = Offset(endX, 0f)
-                )
-                drawRect(brush = brush, size = this.size)
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = ripple(
-                    bounded = true,
-                    color = Color.Transparent
-                ),
-                onClick = onClick
+            .then(
+                if (enabled)
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = ripple(
+                            bounded = true,
+                            color = Color.Transparent
+                        ),
+                        onClick = onClick
+                    )
+                else Modifier
             )
+            .drawBehind {
+                if (animationEnabled) {
+                    val h = size.height
+                    val w = size.width
+                    val shineWidth = scale.dp(72f).toPx()
+
+                    val startX = (progress * (w + shineWidth)) - shineWidth
+                    val endX = startX + shineWidth
+
+                    val brush = Brush.linearGradient(
+                        colors = listOf(
+                            White.copy(alpha = 0f),
+                            White.copy(alpha = 0.05f),
+                            White.copy(alpha = 0.25f),
+                            White.copy(alpha = 0.30f),
+                            White.copy(alpha = 0.25f),
+                            White.copy(alpha = 0.05f),
+                            White.copy(alpha = 0f)
+                        ),
+                        start = Offset(startX, h),
+                        end = Offset(endX, 0f)
+                    )
+                    drawRect(brush = brush, size = this.size)
+                }
+            }
             .padding(horizontal = paddingHorizontal, vertical = paddingVertical),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            color = White,
+            color = if (enabled) White else White.copy(alpha = 0.5f),
             fontFamily = FontFamily.SansSerif,
             fontWeight = FontWeight.Medium,
             fontSize = scale.sp(40f),
-            letterSpacing = scale.sp(4f),
-            style = TextStyle(
-                platformStyle = PlatformTextStyle(
-                    includeFontPadding = false
-                ),
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Center,
-                    trim = LineHeightStyle.Trim.Both
-                ),
-                shadow = Shadow(
-                    color = Color.Black.copy(alpha = 0.5f),
-                    offset = Offset(2f, 2f),
-                    blurRadius = 4f
-                )
-            )
+            letterSpacing = scale.sp(4f)
         )
     }
 }
