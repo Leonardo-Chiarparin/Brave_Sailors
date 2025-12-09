@@ -17,7 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -79,6 +78,11 @@ private fun Modal() {
     var account by remember { mutableStateOf<GoogleSignInAccount?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Stato popup
+    var showPopup by remember { mutableStateOf(false) }
+    var playerName by remember { mutableStateOf("Player") }
+    var playerPhoto by remember { mutableStateOf<String?>(null) }
+
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -111,6 +115,10 @@ private fun Modal() {
                 isSignedIn = true
                 errorMessage = null
 
+                playerName = acc?.displayName ?: "Sailor"
+                playerPhoto = acc?.photoUrl?.toString()
+                showPopup = true
+
                 Log.d("GOOGLE", "Nome: ${acc.givenName}")
                 Log.d("GOOGLE", "Cognome: ${acc.familyName}")
                 Log.d("GOOGLE", "Email: ${acc.email}")
@@ -135,6 +143,10 @@ private fun Modal() {
             account = last
             isSignedIn = true
             isSigningIn = false
+            
+            playerName = last.displayName ?: "Sailor"
+            playerPhoto = last.photoUrl?.toString()
+            showPopup = true
             return
         }
 
@@ -157,16 +169,18 @@ private fun Modal() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
 
-    val startButtonAlpha by animateFloatAsState(
-        if (privacyPolicyAccepted) 1f else 0.5f
-    )
-
     // -------------------- UI --------------------
 
     Box(
         modifier = Modifier.widthIn(max = maxWidth),
         contentAlignment = Alignment.TopCenter
     ) {
+        PlayGamesWelcomePopup(
+            name = playerName,
+            photoUrl = playerPhoto,
+            visible = showPopup,
+            onDismiss = { showPopup = false }
+        )
 
         Box(
             modifier = Modifier
@@ -281,9 +295,7 @@ private fun Modal() {
                     PrimaryButton(
                         text = "START",
                         onClick = { /* navigate */ },
-                        enabled = privacyPolicyAccepted,
-                        disableEffects = true,
-                        modifier = Modifier.alpha(startButtonAlpha)
+                        enabled = privacyPolicyAccepted
                     )
                 }
             }
