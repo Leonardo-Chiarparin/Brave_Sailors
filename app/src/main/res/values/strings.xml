@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">Brave Sailors</string>
+    <string name="app_name">Brave_Sailors</string>
+    <string name="game_services_project_id">101333280904</string>
 </resources>
