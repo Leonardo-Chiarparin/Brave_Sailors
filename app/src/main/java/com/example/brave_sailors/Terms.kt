@@ -1,12 +1,9 @@
 package com.example.brave_sailors
 
 import android.app.Activity
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -14,7 +11,9 @@ import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,12 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import coil.compose.rememberAsyncImagePainter
+import coil.compose.AsyncImage
 import com.example.brave_sailors.domain.use_case.OpenPrivacyPolicyUseCase
-import com.example.brave_sailors.ui.components.GridBackground
-import com.example.brave_sailors.ui.components.PrimaryButton
-import com.example.brave_sailors.ui.components.SecondaryButton
-import com.example.brave_sailors.ui.components.Tab
+import com.example.brave_sailors.ui.components.*
 import com.example.brave_sailors.ui.theme.*
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -78,7 +74,6 @@ private fun Modal() {
     var account by remember { mutableStateOf<GoogleSignInAccount?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Stato popup
     var showPopup by remember { mutableStateOf(false) }
     var playerName by remember { mutableStateOf("Player") }
     var playerPhoto by remember { mutableStateOf<String?>(null) }
@@ -86,8 +81,7 @@ private fun Modal() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // ---------------- GOOGLE SIGN-IN OPTIONS ----------------
-
+    // GOOGLE SIGN-IN OPTIONS
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
@@ -99,8 +93,7 @@ private fun Modal() {
         GoogleSignIn.getClient(context, gso)
     }
 
-    // ---------------- LOGIN RISULTATO ----------------
-
+    // RISULTATO LOGIN
     val signInLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -111,18 +104,15 @@ private fun Modal() {
 
             try {
                 val acc = task.getResult(ApiException::class.java)
+
                 account = acc
                 isSignedIn = true
                 errorMessage = null
 
                 playerName = acc?.displayName ?: "Sailor"
                 playerPhoto = acc?.photoUrl?.toString()
-                showPopup = true
 
-                Log.d("GOOGLE", "Nome: ${acc.givenName}")
-                Log.d("GOOGLE", "Cognome: ${acc.familyName}")
-                Log.d("GOOGLE", "Email: ${acc.email}")
-                Log.d("GOOGLE", "Avatar: ${acc.photoUrl}")
+                showPopup = true
 
             } catch (e: ApiException) {
                 isSignedIn = false
@@ -133,19 +123,20 @@ private fun Modal() {
         }
     }
 
-    // ---------------- FUNZIONE LOGIN GOOGLE ----------------
-
+    // FUNZIONE LOGIN
     fun signIn() {
         isSigningIn = true
 
         val last = GoogleSignIn.getLastSignedInAccount(context)
+
         if (last != null) {
             account = last
             isSignedIn = true
             isSigningIn = false
-            
+
             playerName = last.displayName ?: "Sailor"
             playerPhoto = last.photoUrl?.toString()
+
             showPopup = true
             return
         }
@@ -153,11 +144,16 @@ private fun Modal() {
         signInLauncher.launch(googleSignInClient.signInIntent)
     }
 
-    // ---------------- LOGIN AUTOMATICO ----------------
-    LaunchedEffect(Unit) { signIn() }
+    var didLogin by remember { mutableStateOf(false) }
 
-    // ---------------- HANDLE RETURN PRIVACY ----------------
+    LaunchedEffect(didLogin) {
+        if (!didLogin) {
+            didLogin = true
+            signIn()
+        }
+    }
 
+    // RETURN PRIVACY
     DisposableEffect(lifecycleOwner) {
         val obs = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME && privacyLaunched) {
@@ -169,8 +165,7 @@ private fun Modal() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
 
-    // -------------------- UI --------------------
-
+    // UI
     Box(
         modifier = Modifier.widthIn(max = maxWidth),
         contentAlignment = Alignment.TopCenter
@@ -191,16 +186,13 @@ private fun Modal() {
                 .clip(boxShape),
             contentAlignment = Alignment.Center
         ) {
-
             Box(modifier = Modifier.padding(scale.dp(28f))) {
-
                 GridBackground(Modifier.matchParentSize(), LightBlue, 14f)
 
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-
                     Spacer(Modifier.height(scale.dp(120f)))
 
                     Text(
@@ -225,38 +217,30 @@ private fun Modal() {
 
                     Spacer(Modifier.height(scale.dp(60f)))
 
-                    // ------------------- STATO LOGIN -------------------
-
                     when {
-                        isSigningIn -> CircularProgressIndicator(color = Orange)
-
+                        isSigningIn -> {
+                            CircularProgressIndicator(color = Orange)
+                        }
                         isSignedIn -> {
+                            val fullName =
+                                listOfNotNull(account?.givenName, account?.familyName)
+                                    .joinToString(" ")
+                                    .ifBlank { account?.displayName ?: "User" }
+
+                            val avatarUrl = account?.photoUrl?.toString()
+
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-
                                 Text("Welcome,", color = White)
-
-                                val fullName =
-                                    listOfNotNull(account?.givenName, account?.familyName)
-                                        .joinToString(" ")
-                                        .ifBlank { account?.displayName ?: "User" }
-
-                                val avatarUrl = account?.photoUrl?.toString()
-
                                 Spacer(Modifier.height(16.dp))
 
-                                // FOTO + NOME + EMAIL IN RIGA
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
-
-
-                                    Image(
-                                        painter = rememberAsyncImagePainter(
-                                            model = avatarUrl,
-                                            placeholder = painterResource(id = R.drawable.placeholder_avatar),
-                                            error = painterResource(id = R.drawable.placeholder_avatar)
-                                        ),
+                                    AsyncImage(
+                                        model = avatarUrl,
+                                        placeholder = painterResource(id = R.drawable.placeholder_avatar),
+                                        error = painterResource(id = R.drawable.placeholder_avatar),
                                         contentDescription = "avatar",
                                         modifier = Modifier
                                             .size(70.dp)
@@ -281,20 +265,19 @@ private fun Modal() {
                                         )
                                     }
                                 }
-
                                 Spacer(Modifier.height(16.dp))
                             }
                         }
-
-                        errorMessage != null ->
+                        errorMessage != null -> {
                             Text(errorMessage!!, color = Color.Red)
+                        }
                     }
 
                     Spacer(Modifier.height(scale.dp(50f)))
 
                     PrimaryButton(
                         text = "START",
-                        onClick = { /* navigate */ },
+                        onClick = { },
                         enabled = privacyPolicyAccepted
                     )
                 }
