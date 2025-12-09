@@ -56,6 +56,7 @@ dependencies {
     implementation(libs.androidx.credentials.play.services.auth)
     testImplementation(libs.junit)
     implementation("com.google.android.gms:play-services-games-v2:19.0.0")
+    implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.compose.material:material-icons-extended")
     androidTestImplementation(libs.androidx.junit)
