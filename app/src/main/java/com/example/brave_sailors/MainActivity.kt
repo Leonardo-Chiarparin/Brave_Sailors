@@ -1,18 +1,23 @@
 package com.example.brave_sailors
 
 import android.os.Bundle
+// Rimuoviamo Toast perché non viene più usato qui
+// import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+// Rimuoviamo LocalContext perché non viene più usato qui
+// import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.brave_sailors.ui.theme.Brave_SailorsTheme
 import com.example.brave_sailors.ui.utils.LockScreenOrientation
-import com.example.brave_sailors.IntroScreen
+// AGGIUNGI: L'import per la nuova schermata, assicurati che il percorso sia corretto
+import com.example.brave_sailors.TermsScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,9 +41,10 @@ class MainActivity : ComponentActivity() {
             Brave_SailorsTheme {
                 LockScreenOrientation()
 
-                // Mostra solo e sempre la schermata Intro.
-                // La funzione onTimeout non farà nulla.
-                IntroScreen()
+                // MODIFICA: Chiama TermsScreen senza parametri
+                // La logica di navigazione o chiusura dell'app dovrà essere
+                // gestita all'interno di TermsScreen stessa.
+                TermsScreen()
             }
         }
     }
@@ -48,7 +54,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun Preview() {
     Brave_SailorsTheme {
-        // La preview ora mostra Intro per coerenza.
-        IntroScreen()
+        // MODIFICA: Aggiorna la preview per mostrare TermsScreen senza parametri.
+        TermsScreen()
     }
 }

@@ -1,6 +1,7 @@
 [versions]
 agp = "8.13.1"
 kotlin = "2.0.21"
+ksp = "2.0.21-1.0.25"
 coreKtx = "1.17.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
@@ -12,6 +13,7 @@ foundationLayout = "1.10.0"
 uiText = "1.10.0"
 playServicesAuth = "21.4.0"
 credentialsPlayServicesAuth = "1.5.0"
+
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -37,3 +39,4 @@ androidx-credentials-play-services-auth = { group = "androidx.credentials", name
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

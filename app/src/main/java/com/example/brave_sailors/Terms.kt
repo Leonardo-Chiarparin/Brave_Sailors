@@ -29,6 +29,8 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
+import com.example.brave_sailors.data.local.database.AppDatabase
+import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.domain.use_case.OpenPrivacyPolicyUseCase
 import com.example.brave_sailors.ui.components.*
 import com.example.brave_sailors.ui.theme.*
@@ -37,6 +39,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import kotlinx.coroutines.launch
 
 @Composable
 fun TermsScreen(innerPadding: PaddingValues = PaddingValues(0.dp)) {
@@ -80,6 +83,8 @@ private fun Modal() {
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    val userDao = remember(context) { AppDatabase.getDatabase(context).userDao() }
 
     // GOOGLE SIGN-IN OPTIONS
     val gso = remember {
@@ -112,6 +117,18 @@ private fun Modal() {
                 playerName = acc?.displayName ?: "Sailor"
                 playerPhoto = acc?.photoUrl?.toString()
 
+                acc?.let { googleAccount ->
+                    scope.launch {
+                        val user = User(
+                            id = googleAccount.id!!,
+                            name = googleAccount.displayName ?: "Sailor",
+                            email = googleAccount.email!!,
+                            profilePictureUrl = googleAccount.photoUrl?.toString()
+                        )
+                        userDao.insertUser(user)
+                    }
+                }
+
                 showPopup = true
 
             } catch (e: ApiException) {
@@ -136,6 +153,16 @@ private fun Modal() {
 
             playerName = last.displayName ?: "Sailor"
             playerPhoto = last.photoUrl?.toString()
+
+            scope.launch {
+                val user = User(
+                    id = last.id!!,
+                    name = last.displayName ?: "Sailor",
+                    email = last.email!!,
+                    profilePictureUrl = last.photoUrl?.toString()
+                )
+                userDao.insertUser(user)
+            }
 
             showPopup = true
             return
