@@ -2,6 +2,9 @@ package com.example.brave_sailors
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -107,23 +110,23 @@ private fun Modal() {
                     .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // [ OPTIONAL ]: Try to insert an image conversely ( otherwise remove this box ). Its shape is reported below
                 Box(
                     modifier = Modifier
                         .width(scale.dp(672f))
-                        .height(scale.dp(480f))
-                        .background(Color.Transparent),
+                        .height(scale.dp(480f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Canvas(modifier = Modifier.matchParentSize()) {
-                        drawOval(
-                            color = Grey,
-                            topLeft = Offset.Zero,
-                            size = size,
-                            style = Stroke(width = scale.dp(1f).toPx())
-                        )
-                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.fleet_ships),
+                        contentDescription = "Fleet ships hero image",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(androidx.compose.foundation.shape.CircleShape), // <-- TONDA
+                        contentScale = ContentScale.Crop
+                    )
                 }
+
+
 
                 Spacer(modifier = Modifier.height(scale.dp(88f)))
 
