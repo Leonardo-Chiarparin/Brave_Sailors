@@ -1,25 +1,74 @@
 package com.example.brave_sailors.ui.utils
 
-import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.view.OrientationEventListener
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 
-@SuppressLint("SourceLockedOrientationActivity")
 @Composable
-fun LockScreenOrientation() {
+fun LockScreenOrientation(isPortrait: Boolean) {
     val context = LocalContext.current
+    val currentState = rememberUpdatedState(isPortrait)
 
-    DisposableEffect(Unit) {
-        val activity = context as? Activity
-        val originalOrientation = activity?.requestedOrientation
+    LaunchedEffect(Unit) {
+        val activity = context.findActivity()
 
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-
-        onDispose {
-            originalOrientation?.let { activity.requestedOrientation = it }
+        if (activity != null) {
+            if (currentState.value) {
+                if ((activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) || (activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT))
+                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            }
+            // else { ... }
         }
     }
+
+    DisposableEffect(Unit) {
+        val activity = context.findActivity() ?: return@DisposableEffect onDispose {  }
+
+        if (currentState.value && (activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_PORTRAIT))
+           activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+
+        val handler = object : OrientationEventListener(context) {
+            override fun onOrientationChanged(orientation: Int) {
+                if (orientation == ORIENTATION_UNKNOWN)
+                    return
+
+                val target = when {
+                    // Portrait
+                    currentState.value && orientation in 150..210 -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+
+                    // Reverse Portrait
+                    currentState.value && orientation !in 31..329 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+
+                    // [ TO - DO ]: Implement the remaining part by adapting the screen to the other orientation
+                    // Landscape: !currentState.value && orientation in 240..300
+                    // Reverse Landscape: !currentState.value && orientation in 60..120
+
+                    else -> null
+                }
+
+                if (target != null && activity.requestedOrientation != target)
+                    activity.requestedOrientation = target
+            }
+        }
+
+        if (handler.canDetectOrientation())
+            handler.enable()
+
+        onDispose {
+            handler.disable()
+        }
+    }
+}
+
+fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
