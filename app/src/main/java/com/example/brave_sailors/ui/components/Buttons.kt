@@ -22,7 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,28 +52,17 @@ import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
 @SuppressLint("UnrememberedMutableState")
 @Composable
-fun PrimaryButton(
-    text: String,
-    onClick: () -> Unit,
-    enabled: Boolean,
-    modifier: Modifier = Modifier,
-    disableEffects: Boolean = false
-) {
+fun PrimaryButton(paddingH: Float, paddingV: Float, text: String, onClick: () -> Unit, enabled: Boolean = true) {
     val scale = RememberScaleConversion()
 
-    // Abilitiamo shiny solo se il bottone è abilitato e gli effetti non sono disabilitati
-    val animationEnabled = enabled && !disableEffects
-
-    // Gestione animazione sicura (senza duration = 0)
     val transition = rememberInfiniteTransition(label = "ShinyTransition")
-
-    val progress by if (animationEnabled) {
+    val progress by if (enabled) {
         transition.animateFloat(
             initialValue = -0.4f,
             targetValue = 1.6f,
             animationSpec = infiniteRepeatable(
                 animation = tween(
-                    delayMillis = 5000,
+                    delayMillis = 4150,
                     durationMillis = 850,
                     easing = LinearEasing
                 ),
@@ -82,62 +71,43 @@ fun PrimaryButton(
             label = "ShinyOffset"
         )
     } else {
-        // Valore statico → nessuna animazione → nessun crash
-        mutableStateOf(-0.4f)
+        mutableFloatStateOf(-0.4f)
     }
 
     val cutSizeDp = scale.dp(36f)
-    val paddingHorizontal = scale.dp(112f)
-    val paddingVertical = scale.dp(28f)
+    val paddingHorizontal = scale.dp(paddingH)
+    val paddingVertical = scale.dp(paddingV)
 
     val interactionSource = remember { MutableInteractionSource() }
 
-    val baseBg = Orange.copy(alpha = 0.90f)
-    val bgColor = if (enabled) baseBg else baseBg.copy(alpha = 0.40f)
-
-    val buttonShape = CutCornerShape(
-        bottomStart = cutSizeDp,
-        bottomEnd = cutSizeDp,
-        topStart = 0.dp,
-        topEnd = 0.dp
-    )
+    val bgColor = Orange.copy(alpha = 0.90f)
+    val buttonShape = CutCornerShape(bottomStart = cutSizeDp, bottomEnd = cutSizeDp, topStart = 0.dp, topEnd = 0.dp)
 
     Box(
-        modifier = modifier
-            .alpha(if (enabled) 1f else 0.5f)
+        modifier = Modifier
+            .alpha(if (enabled) 1f else 0.75f)
             .clip(buttonShape)
             .border(BorderStroke(scale.dp(1f), LightGrey.copy(alpha = 0.75f)), buttonShape)
             .background(bgColor)
-            .then(
-                if (enabled)
-                    Modifier.clickable(
-                        interactionSource = interactionSource,
-                        indication = ripple(
-                            bounded = true,
-                            color = Color.Transparent
-                        ),
-                        onClick = onClick
-                    )
-                else Modifier
-            )
             .drawBehind {
-                if (animationEnabled) {
+                if (enabled) {
                     val h = size.height
                     val w = size.width
+
                     val shineWidth = scale.dp(72f).toPx()
 
-                    val startX = (progress * (w + shineWidth)) - shineWidth
+                    val startX = ( progress * ( w + shineWidth ) ) - shineWidth
                     val endX = startX + shineWidth
 
                     val brush = Brush.linearGradient(
                         colors = listOf(
-                            White.copy(alpha = 0f),
+                            White.copy(alpha = 0.0f),
                             White.copy(alpha = 0.05f),
                             White.copy(alpha = 0.25f),
                             White.copy(alpha = 0.30f),
                             White.copy(alpha = 0.25f),
                             White.copy(alpha = 0.05f),
-                            White.copy(alpha = 0f)
+                            White.copy(alpha = 0.0f)
                         ),
                         start = Offset(startX, h),
                         end = Offset(endX, 0f)
@@ -145,26 +115,49 @@ fun PrimaryButton(
                     drawRect(brush = brush, size = this.size)
                 }
             }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(
+                    bounded = true,
+                    color = Color.Transparent
+                ),
+                enabled = enabled,
+                onClick = onClick
+            )
             .padding(horizontal = paddingHorizontal, vertical = paddingVertical),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            color = if (enabled) White else White.copy(alpha = 0.5f),
+            color = White,
             fontFamily = FontFamily.SansSerif,
             fontWeight = FontWeight.Medium,
             fontSize = scale.sp(40f),
-            letterSpacing = scale.sp(4f)
+            letterSpacing = scale.sp(4f),
+            style = TextStyle(
+                platformStyle = PlatformTextStyle(
+                    includeFontPadding = false
+                ),
+                lineHeightStyle = LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Center,
+                    trim = LineHeightStyle.Trim.Both
+                ),
+                shadow = Shadow(
+                    color = Color.Black.copy(alpha = 0.5f),
+                    offset = Offset(2f, 2f),
+                    blurRadius = 4f
+                )
+            )
         )
     }
 }
 
 @Composable
-fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun SecondaryButton(paddingH: Float, paddingV: Float, text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val scale = RememberScaleConversion()
 
-    val paddingHorizontal = scale.dp(54f)
-    val paddingVertical = scale.dp(22f)
+    val paddingHorizontal = scale.dp(paddingH)
+    val paddingVertical = scale.dp(paddingV)
 
     val cutSizeDp = scale.dp(18f)
     val buttonShape = CutCornerShape(

@@ -7,6 +7,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -22,7 +23,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -71,6 +76,8 @@ private fun Modal() {
     var privacyPolicyAccepted by rememberSaveable { mutableStateOf(false) }
     var privacyLaunched by rememberSaveable { mutableStateOf(false) }
 
+    val privacyUrl = "https://privacy-service-101333280904.europe-west1.run.app/privacy-policy"
+
     var isSignedIn by rememberSaveable { mutableStateOf(false) }
     var isSigningIn by remember { mutableStateOf(false) }
 
@@ -86,7 +93,6 @@ private fun Modal() {
     val scope = rememberCoroutineScope()
     val userDao = remember(context) { AppDatabase.getDatabase(context).userDao() }
 
-    // GOOGLE SIGN-IN OPTIONS
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
@@ -98,7 +104,6 @@ private fun Modal() {
         GoogleSignIn.getClient(context, gso)
     }
 
-    // RISULTATO LOGIN
     val signInLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -115,7 +120,8 @@ private fun Modal() {
                 errorMessage = null
 
                 playerName = acc?.displayName ?: "Sailor"
-                playerPhoto = acc?.photoUrl?.toString()
+                playerPhoto = acc?.photoUrl?.toString() ?: "placeholder_avatar"
+
 
                 acc?.let { googleAccount ->
                     scope.launch {
@@ -140,7 +146,6 @@ private fun Modal() {
         }
     }
 
-    // FUNZIONE LOGIN
     fun signIn() {
         isSigningIn = true
 
@@ -180,29 +185,88 @@ private fun Modal() {
         }
     }
 
-    // RETURN PRIVACY
     DisposableEffect(lifecycleOwner) {
         val obs = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && privacyLaunched) {
+            if ((event == Lifecycle.Event.ON_RESUME) && ((!privacyPolicyAccepted) && privacyLaunched)) {
                 privacyPolicyAccepted = true
-                privacyLaunched = false
             }
         }
         lifecycleOwner.lifecycle.addObserver(obs)
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter){
+        if (showPopup) {
+            Popup(
+                start = showPopup,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = scale.dp(98f))
+                    .zIndex(2f),
+                avatar = {
+                    AsyncImage(
+                        model = if (playerPhoto.isNullOrEmpty() || playerPhoto == "placeholder_avatar")
+                                R.drawable.placeholder_avatar
+                        else
+                            playerPhoto,
+                        contentDescription = "avatar",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                },
+                content = {
+                    Column(
+                        modifier = Modifier.fillMaxHeight(),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Hello, $playerName",
+                            color = Color.Black,
+                            fontFamily = FontFamily.SansSerif,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = scale.sp(22f),
+                            letterSpacing = scale.sp(2f),
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(
+                                    includeFontPadding = false
+                                ),
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.Both
+                                )
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(scale.dp(16f)))
+                        Text(
+                            text = account?.email ?: "",
+                            color = LightGrey,
+                            fontFamily = FontFamily.SansSerif,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = scale.sp(20f),
+                            letterSpacing = scale.sp(2f),
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(
+                                    includeFontPadding = false
+                                ),
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.Both
+                                )
+                            )
+                        )
+                    }
+                },
+                onDone = { showPopup = false }
+            )
+        }
+    }
 
-    // UI
+
     Box(
         modifier = Modifier.widthIn(max = maxWidth),
         contentAlignment = Alignment.TopCenter
     ) {
-        PlayGamesWelcomePopup(
-            name = playerName,
-            photoUrl = playerPhoto,
-            visible = showPopup,
-            onDismiss = { showPopup = false }
-        )
 
         Box(
             modifier = Modifier
@@ -229,80 +293,30 @@ private fun Modal() {
                         fontSize = scale.sp(26f)
                     )
 
-                    Spacer(Modifier.height(scale.dp(60f)))
+                    Spacer(Modifier.height(scale.dp(114f)))
 
                     SecondaryButton(
+                        paddingH = 54f,
+                        paddingV = 22f,
                         text = "Privacy Policy",
                         onClick = {
                             privacyLaunched = true
                             openPrivacyPolicy(
                                 context,
-                                "https://privacy-service-101333280904.europe-west1.run.app/privacy-policy"
+                                privacyUrl
                             )
-                        }
+                        },
+                        modifier = Modifier
                     )
 
-                    Spacer(Modifier.height(scale.dp(60f)))
+                    Spacer(Modifier.height(scale.dp(82f)))
 
-                    when {
-                        isSigningIn -> {
-                            CircularProgressIndicator(color = Orange)
-                        }
-                        isSignedIn -> {
-                            val fullName =
-                                listOfNotNull(account?.givenName, account?.familyName)
-                                    .joinToString(" ")
-                                    .ifBlank { account?.displayName ?: "User" }
-
-                            val avatarUrl = account?.photoUrl?.toString()
-
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Welcome,", color = White)
-                                Spacer(Modifier.height(16.dp))
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    AsyncImage(
-                                        model = avatarUrl,
-                                        placeholder = painterResource(id = R.drawable.placeholder_avatar),
-                                        error = painterResource(id = R.drawable.placeholder_avatar),
-                                        contentDescription = "avatar",
-                                        modifier = Modifier
-                                            .size(70.dp)
-                                            .clip(CutCornerShape(12.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-
-                                    Spacer(Modifier.width(16.dp))
-
-                                    Column(horizontalAlignment = Alignment.Start) {
-                                        Text(
-                                            text = fullName,
-                                            color = Orange,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = scale.sp(26f)
-                                        )
-                                        Text(
-                                            text = account?.email ?: "",
-                                            color = White,
-                                            fontWeight = FontWeight.Medium,
-                                            fontSize = scale.sp(18f)
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.height(16.dp))
-                            }
-                        }
-                        errorMessage != null -> {
-                            Text(errorMessage!!, color = Color.Red)
-                        }
-                    }
 
                     Spacer(Modifier.height(scale.dp(50f)))
 
                     PrimaryButton(
+                        paddingH = 112f,
+                        paddingV = 28f,
                         text = "START",
                         onClick = { },
                         enabled = privacyPolicyAccepted
@@ -310,9 +324,8 @@ private fun Modal() {
                 }
             }
         }
-
-        Box(Modifier.zIndex(2f)) {
-            Tab(text = "Consensus")
+        Box(Modifier.zIndex(1f)) {
+            Tab(paddingH = 130f, paddingV = 32f, text = "Consensus")
         }
     }
 }

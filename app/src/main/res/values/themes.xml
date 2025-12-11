@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
     <!-- Main application theme -->
-    <!-- No ActionBar, no title bar -->
     <style name="Theme.Brave_Sailors" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
@@ -13,20 +11,20 @@
     <!-- Splash screen theme -->
     <style name="Theme.App.Starting" parent="Theme.SplashScreen">
 
-        <!-- Background color of the splash window -->
+        <!-- Background color -->
         <item name="windowSplashScreenBackground">@color/splash_background</item>
 
-        <!-- Static or animated splash image -->
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <!-- Usa il nuovo layer-list con dimensioni 768dp -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo</item>
 
-        <!-- Theme applied after the splash screen disappears -->
+        <!-- Tema dopo lo splash -->
         <item name="postSplashScreenTheme">@style/Theme.Brave_Sailors</item>
 
-        <!-- 🚫 Disable ActionBar and title bar ALSO during the splash screen -->
+        <!-- Rimuove ActionBar e Title anche nello splash -->
         <item name="android:windowNoTitle">true</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
         <item name="windowActionBar">false</item>
-    </style>
 
+    </style>
 </resources>
