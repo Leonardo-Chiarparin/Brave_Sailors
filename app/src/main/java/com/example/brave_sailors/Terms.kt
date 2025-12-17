@@ -7,8 +7,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
@@ -17,12 +17,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -40,6 +46,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.launch
+import kotlin.jvm.java
 
 @Composable
 fun TermsScreen(innerPadding: PaddingValues = PaddingValues(0.dp)) {
@@ -49,6 +56,7 @@ fun TermsScreen(innerPadding: PaddingValues = PaddingValues(0.dp)) {
             .background(Color.Transparent)
             .padding(innerPadding)
     ) {
+        // Center area
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -63,42 +71,45 @@ fun TermsScreen(innerPadding: PaddingValues = PaddingValues(0.dp)) {
 
 @Composable
 private fun Modal() {
-    val scale = RememberScaleConversion()
-    val boxShape = CutCornerShape(scale.dp(28f))
-    val maxWidth = scale.dp(648f)
-    val openPrivacyPolicy = remember { OpenPrivacyPolicyUseCase() }
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
 
-    var privacyPolicyAccepted by rememberSaveable { mutableStateOf(false) }
+    // -- SCALE ( used for applying conversions )
+    val scale = RememberScaleConversion()
+
+    // [ MEMO ]: Sizes are taken from 720 x 1600px mockup ( with 72dpi ) using the Redmi Note 10S
+    val boxShape = CutCornerShape(scale.dp(28f)) // 28px
+
+    val maxWidth = scale.dp(648f) // 648px, etc.
+
+    // -- STATE ( implemented to persist across recompositions )
+    var privacyAccepted by rememberSaveable { mutableStateOf(false) }
     var privacyLaunched by rememberSaveable { mutableStateOf(false) }
+    var showPopup by remember { mutableStateOf(false) }
 
     var isSignedIn by rememberSaveable { mutableStateOf(false) }
     var isSigningIn by remember { mutableStateOf(false) }
 
     var account by remember { mutableStateOf<GoogleSignInAccount?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
 
-    var showPopup by remember { mutableStateOf(false) }
     var playerName by remember { mutableStateOf("Player") }
     var playerPhoto by remember { mutableStateOf<String?>(null) }
 
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val scope = rememberCoroutineScope()
+    val openPrivacyPolicy = remember { OpenPrivacyPolicyUseCase() }
+    val privacyUrl = "https://privacy-service-101333280904.europe-west1.run.app/privacy-policy"
     val userDao = remember(context) { AppDatabase.getDatabase(context).userDao() }
 
-    // GOOGLE SIGN-IN OPTIONS
-    val gso = remember {
+    val options = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             .requestProfile()
             .build()
     }
 
-    val googleSignInClient = remember(context, gso) {
-        GoogleSignIn.getClient(context, gso)
-    }
+    val googleSignInClient = remember(context, options) { GoogleSignIn.getClient(context, options) }
 
-    // RISULTATO LOGIN
     val signInLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -108,16 +119,15 @@ private fun Modal() {
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
 
             try {
-                val acc = task.getResult(ApiException::class.java)
+                account = task.getResult(ApiException::class.java)
 
-                account = acc
                 isSignedIn = true
-                errorMessage = null
+                message = null
 
-                playerName = acc?.displayName ?: "Sailor"
-                playerPhoto = acc?.photoUrl?.toString()
+                playerName = account?.displayName ?: "Sailor"
+                playerPhoto = account?.photoUrl?.toString() ?: "placeholder_avatar"
 
-                acc?.let { googleAccount ->
+                account?.let { googleAccount ->
                     scope.launch {
                         val user = User(
                             id = googleAccount.id!!,
@@ -133,42 +143,11 @@ private fun Modal() {
 
             } catch (e: ApiException) {
                 isSignedIn = false
-                errorMessage = "Google login failed (${e.statusCode})"
+                message = "Login failed: (${e.statusCode})"
             }
         } else {
-            errorMessage = "Login cancelled."
+            message = "Login cancelled."
         }
-    }
-
-    // FUNZIONE LOGIN
-    fun signIn() {
-        isSigningIn = true
-
-        val last = GoogleSignIn.getLastSignedInAccount(context)
-
-        if (last != null) {
-            account = last
-            isSignedIn = true
-            isSigningIn = false
-
-            playerName = last.displayName ?: "Sailor"
-            playerPhoto = last.photoUrl?.toString()
-
-            scope.launch {
-                val user = User(
-                    id = last.id!!,
-                    name = last.displayName ?: "Sailor",
-                    email = last.email!!,
-                    profilePictureUrl = last.photoUrl?.toString()
-                )
-                userDao.insertUser(user)
-            }
-
-            showPopup = true
-            return
-        }
-
-        signInLauncher.launch(googleSignInClient.signInIntent)
     }
 
     var didLogin by remember { mutableStateOf(false) }
@@ -176,36 +155,129 @@ private fun Modal() {
     LaunchedEffect(didLogin) {
         if (!didLogin) {
             didLogin = true
-            signIn()
-        }
-    }
+            isSigningIn = true
 
-    // RETURN PRIVACY
-    DisposableEffect(lifecycleOwner) {
-        val obs = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && privacyLaunched) {
-                privacyPolicyAccepted = true
-                privacyLaunched = false
+            val last = GoogleSignIn.getLastSignedInAccount(context)
+
+            if (last != null) {
+                account = last
+                isSignedIn = true
+                isSigningIn = false
+
+                playerName = last.displayName ?: "Sailor"
+                playerPhoto = last.photoUrl?.toString()
+
+                scope.launch {
+                    val user = User(
+                        id = last.id!!,
+                        name = last.displayName ?: "Sailor",
+                        email = last.email!!,
+                        profilePictureUrl = last.photoUrl?.toString()
+                    )
+                    userDao.insertUser(user)
+                }
+
+                showPopup = true
             }
+            else
+                signInLauncher.launch(googleSignInClient.signInIntent)
         }
-        lifecycleOwner.lifecycle.addObserver(obs)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
 
-    // UI
+    // [ NOTE ]: This block witnesses the app's state, keeping trace about the moment when it returns to foreground ( e.g., after the user reviews the "Privacy Policy" page )
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if ((event == Lifecycle.Event.ON_RESUME) && ((!privacyAccepted) && privacyLaunched))
+                privacyAccepted = true
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     Box(
-        modifier = Modifier.widthIn(max = maxWidth),
+        modifier = Modifier
+            .fillMaxSize(),
         contentAlignment = Alignment.TopCenter
     ) {
-        PlayGamesWelcomePopup(
-            name = playerName,
-            photoUrl = playerPhoto,
-            visible = showPopup,
-            onDismiss = { showPopup = false }
-        )
+        if (showPopup) {
+            Popup(
+                start = true,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = scale.dp(98f))
+                    .zIndex(2f),
+                avatar = {
+                    AsyncImage(
+                        model = if (playerPhoto.isNullOrEmpty() || playerPhoto == "placeholder_avatar")
+                            R.drawable.ic_terms
+                        else
+                            playerPhoto,
+                        contentDescription = "avatar",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                },
+                content = {
+                    Column(
+                        modifier = Modifier.fillMaxHeight(),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Hello, $playerName",
+                            color = Color.Black,
+                            fontFamily = FontFamily.SansSerif,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = scale.sp(22f),
+                            letterSpacing = scale.sp(2f),
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(
+                                    includeFontPadding = false
+                                ),
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.Both
+                                )
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(scale.dp(16f)))
+                        Text(
+                            text = account?.email ?: "",
+                            color = LightGrey,
+                            fontFamily = FontFamily.SansSerif,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = scale.sp(20f),
+                            letterSpacing = scale.sp(2f),
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(
+                                    includeFontPadding = false
+                                ),
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.Both
+                                )
+                            )
+                        )
+                    }
+                },
+                onDone = { showPopup = false }
+            )
+        }
+    }
 
+    Box(
+        modifier = Modifier
+            .widthIn(max = maxWidth),
+        contentAlignment = Alignment.TopCenter
+    ) {
         Box(
             modifier = Modifier
+                // borderStroke + ( HeaderTab's height / 2 ) = 2 + ( ( 32 + 32 + 32 ) / 2 ), also taking into account the size of its content
                 .padding(top = scale.dp(50f))
                 .fillMaxWidth()
                 .background(DarkBlue, shape = boxShape)
@@ -213,106 +285,109 @@ private fun Modal() {
                 .clip(boxShape),
             contentAlignment = Alignment.Center
         ) {
-            Box(modifier = Modifier.padding(scale.dp(28f))) {
-                GridBackground(Modifier.matchParentSize(), LightBlue, 14f)
+            Box(
+                modifier = Modifier
+                    .padding(all = scale.dp(28f))
+                    .clip(RectangleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                GridBackground(Modifier.matchParentSize(), color = LightBlue, 14f)
 
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = scale.dp(48f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Spacer(Modifier.height(scale.dp(120f)))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(modifier = Modifier.height(scale.dp(146f)))
 
-                    Text(
-                        "To use this service, users must review the following terms.",
-                        color = White,
-                        textAlign = TextAlign.Center,
-                        fontSize = scale.sp(26f)
-                    )
-
-                    Spacer(Modifier.height(scale.dp(60f)))
-
-                    SecondaryButton(
-                        text = "Privacy Policy",
-                        onClick = {
-                            privacyLaunched = true
-                            openPrivacyPolicy(
-                                context,
-                                "https://privacy-service-101333280904.europe-west1.run.app/privacy-policy"
+                        Text(
+                            text = "To use this service, users must review the application's terms first. Minors have to obtain permission from their parents or legal guardians.",
+                            color = White,
+                            textAlign = TextAlign.Center,
+                            fontSize = scale.sp(28f),
+                            fontFamily = FontFamily.SansSerif,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = scale.sp(32f),
+                            letterSpacing = scale.sp(2f),
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(
+                                    includeFontPadding = false
+                                ),
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.Both
+                                ),
+                                shadow = Shadow(
+                                    color = Color.Black,
+                                    offset = Offset(2f, 2f),
+                                    blurRadius = 4f
+                                )
                             )
-                        }
-                    )
+                        )
 
-                    Spacer(Modifier.height(scale.dp(60f)))
+                        Spacer(modifier = Modifier.height(scale.dp(114f)))
 
-                    when {
-                        isSigningIn -> {
-                            CircularProgressIndicator(color = Orange)
-                        }
-                        isSignedIn -> {
-                            val fullName =
-                                listOfNotNull(account?.givenName, account?.familyName)
-                                    .joinToString(" ")
-                                    .ifBlank { account?.displayName ?: "User" }
+                        SecondaryButton(
+                            paddingH = 54f,
+                            paddingV = 22f,
+                            text = "Privacy Policy",
+                            onClick = {
+                                privacyLaunched = true
+                                openPrivacyPolicy(context, privacyUrl)
+                            },
+                            modifier = Modifier
+                        )
 
-                            val avatarUrl = account?.photoUrl?.toString()
+                        Spacer(modifier = Modifier.height(scale.dp(82f)))
 
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Welcome,", color = White)
-                                Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = "By tapping \"START\", the customer formally agrees to these conditions.",
+                            color = White,
+                            textAlign = TextAlign.Center,
+                            fontSize = scale.sp(20f),
+                            fontFamily = FontFamily.SansSerif,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = scale.sp(24f),
+                            letterSpacing = scale.sp(2f),
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(
+                                    includeFontPadding = false
+                                ),
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.Both
+                                ),
+                                shadow = Shadow(
+                                    color = Color.Black,
+                                    offset = Offset(2f, 2f),
+                                    blurRadius = 4f
+                                )
+                            )
+                        )
 
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    AsyncImage(
-                                        model = avatarUrl,
-                                        placeholder = painterResource(id = R.drawable.placeholder_avatar),
-                                        error = painterResource(id = R.drawable.placeholder_avatar),
-                                        contentDescription = "avatar",
-                                        modifier = Modifier
-                                            .size(70.dp)
-                                            .clip(CutCornerShape(12.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
+                        Spacer(modifier = Modifier.height(scale.dp(70f)))
 
-                                    Spacer(Modifier.width(16.dp))
+                        PrimaryButton(
+                            112f,
+                            28f,
+                            text = "START",
+                            onClick = {},
+                            enabled = privacyAccepted
+                        )
 
-                                    Column(horizontalAlignment = Alignment.Start) {
-                                        Text(
-                                            text = fullName,
-                                            color = Orange,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = scale.sp(26f)
-                                        )
-                                        Text(
-                                            text = account?.email ?: "",
-                                            color = White,
-                                            fontWeight = FontWeight.Medium,
-                                            fontSize = scale.sp(18f)
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.height(16.dp))
-                            }
-                        }
-                        errorMessage != null -> {
-                            Text(errorMessage!!, color = Color.Red)
-                        }
+                        Spacer(modifier = Modifier.height(scale.dp(80f)))
                     }
-
-                    Spacer(Modifier.height(scale.dp(50f)))
-
-                    PrimaryButton(
-                        text = "START",
-                        onClick = { },
-                        enabled = privacyPolicyAccepted
-                    )
                 }
             }
         }
 
-        Box(Modifier.zIndex(2f)) {
-            Tab(text = "Consensus")
+        Box(modifier = Modifier.zIndex(1f)) {
+            Tab(130f, 32f, text = "Consensus")
         }
     }
 }
