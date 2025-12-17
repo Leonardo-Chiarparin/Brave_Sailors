@@ -1,5 +1,6 @@
 package com.example.brave_sailors.ui.components
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -21,9 +22,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -47,28 +50,33 @@ import com.example.brave_sailors.ui.theme.TransparentGrey
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
+@SuppressLint("UnrememberedMutableState")
 @Composable
-fun PrimaryButton(text: String, onClick: () -> Unit) {
+fun PrimaryButton(paddingH: Float, paddingV: Float, text: String, onClick: () -> Unit, enabled: Boolean = true) {
     val scale = RememberScaleConversion()
 
     val transition = rememberInfiniteTransition(label = "ShinyTransition")
-    val progress by transition.animateFloat(
-        initialValue = -0.4f,
-        targetValue = 1.6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                delayMillis = 5000,
-                durationMillis = 850,
-                easing = LinearEasing
+    val progress by if (enabled) {
+        transition.animateFloat(
+            initialValue = -0.4f,
+            targetValue = 1.6f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    delayMillis = 4150,
+                    durationMillis = 850,
+                    easing = LinearEasing
+                ),
+                repeatMode = RepeatMode.Restart
             ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ShinyOffset"
-    )
+            label = "ShinyOffset"
+        )
+    } else {
+        mutableFloatStateOf(-0.4f)
+    }
 
     val cutSizeDp = scale.dp(36f)
-    val paddingHorizontal = scale.dp(112f)
-    val paddingVertical = scale.dp(28f)
+    val paddingHorizontal = scale.dp(paddingH)
+    val paddingVertical = scale.dp(paddingV)
 
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -77,32 +85,35 @@ fun PrimaryButton(text: String, onClick: () -> Unit) {
 
     Box(
         modifier = Modifier
+            .alpha(if (enabled) 1f else 0.75f)
             .clip(buttonShape)
             .border(BorderStroke(scale.dp(1f), LightGrey.copy(alpha = 0.75f)), buttonShape)
             .background(bgColor)
             .drawBehind {
-                val h = size.height
-                val w = size.width
+                if (enabled) {
+                    val h = size.height
+                    val w = size.width
 
-                val shineWidth = scale.dp(72f).toPx()
+                    val shineWidth = scale.dp(72f).toPx()
 
-                val startX = ( progress * ( w + shineWidth ) ) - shineWidth
-                val endX = startX + shineWidth
+                    val startX = ( progress * ( w + shineWidth ) ) - shineWidth
+                    val endX = startX + shineWidth
 
-                val brush = Brush.linearGradient(
-                    colors = listOf(
-                        White.copy(alpha = 0.0f),
-                        White.copy(alpha = 0.05f),
-                        White.copy(alpha = 0.25f),
-                        White.copy(alpha = 0.30f),
-                        White.copy(alpha = 0.25f),
-                        White.copy(alpha = 0.05f),
-                        White.copy(alpha = 0.0f)
-                    ),
-                    start = Offset(startX, h),
-                    end = Offset(endX, 0f)
-                )
-                drawRect(brush = brush, size = this.size)
+                    val brush = Brush.linearGradient(
+                        colors = listOf(
+                            White.copy(alpha = 0.0f),
+                            White.copy(alpha = 0.05f),
+                            White.copy(alpha = 0.25f),
+                            White.copy(alpha = 0.30f),
+                            White.copy(alpha = 0.25f),
+                            White.copy(alpha = 0.05f),
+                            White.copy(alpha = 0.0f)
+                        ),
+                        start = Offset(startX, h),
+                        end = Offset(endX, 0f)
+                    )
+                    drawRect(brush = brush, size = this.size)
+                }
             }
             .clickable(
                 interactionSource = interactionSource,
@@ -110,6 +121,7 @@ fun PrimaryButton(text: String, onClick: () -> Unit) {
                     bounded = true,
                     color = Color.Transparent
                 ),
+                enabled = enabled,
                 onClick = onClick
             )
             .padding(horizontal = paddingHorizontal, vertical = paddingVertical),
@@ -141,11 +153,11 @@ fun PrimaryButton(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun SecondaryButton(paddingH: Float, paddingV: Float, text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val scale = RememberScaleConversion()
 
-    val paddingHorizontal = scale.dp(54f)
-    val paddingVertical = scale.dp(22f)
+    val paddingHorizontal = scale.dp(paddingH)
+    val paddingVertical = scale.dp(paddingV)
 
     val cutSizeDp = scale.dp(18f)
     val buttonShape = CutCornerShape(
@@ -155,8 +167,8 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
         topEnd = 0.dp
     )
 
-    val baseColor = TransparentGrey.copy(alpha = 0.75f)
-    val pressedColor = TransparentGrey.copy(alpha = 0.5f)
+    val baseColor = TransparentGrey.copy(alpha = 0.90f)
+    val pressedColor = TransparentGrey.copy(alpha = 0.75f)
 
     val borderColor = LightGrey
 

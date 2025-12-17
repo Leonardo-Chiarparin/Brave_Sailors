@@ -21,11 +21,11 @@ import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
 @Composable
-fun Tab(text: String) {
+fun Tab(paddingH: Float, paddingV: Float, text: String) {
     val scale = RememberScaleConversion()
 
-    val paddingHorizontal = scale.dp(130f)
-    val paddingVertical = scale.dp(32f)
+    val paddingHorizontal = scale.dp(paddingH)
+    val paddingVertical = scale.dp(paddingV)
 
     val cutSizeDp = scale.dp(24f)
 

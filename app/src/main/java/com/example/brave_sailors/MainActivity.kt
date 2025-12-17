@@ -11,7 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
-// import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -20,10 +20,9 @@ import com.example.brave_sailors.ui.utils.LockScreenOrientation
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // [ TO - DO ]: Add the dependency "implementation("androidx.core:core-splashscreen:1.0.1")" inside the "build.gradle.kts" file
-        // val splashScreen = installSplashScreen()
-        // splashScreen.setKeepOnScreenCondition { ... } until the forthcoming ViewModel's implementation is not ready
-        
+        // [ TO - DO ]: Implement the splashscreen in such a way it waits until the ViewModel prepares the first screen ( if necessary )
+        installSplashScreen()
+
         super.onCreate(savedInstanceState)
 
         // [ TO - DO ]: Change the theme according to the current page ( if necessary )
@@ -43,8 +42,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Brave_SailorsTheme {
-                // [ TO - DO ]: Check whether the following method is actually working on our mobile devices
-                LockScreenOrientation()
+                // [ TO - DO ]: User's preferences regarding the screen orientation should be managed through a proper variable, whose state will be changed according to the settings inside the correspondent page ( accessible via Menu.kt )
+                // e.g., val orientation by settingsViewModel.isPortrait.collectAsState(initial = true)
+                // [ NOTE ]: Landscape shapes of the pages will be implemented as soon as possible
+                LockScreenOrientation(isPortrait = true)
 
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
