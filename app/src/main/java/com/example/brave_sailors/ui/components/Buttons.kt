@@ -167,8 +167,8 @@ fun SecondaryButton(paddingH: Float, paddingV: Float, text: String, onClick: () 
         topEnd = 0.dp
     )
 
-    val baseColor = TransparentGrey.copy(alpha = 0.75f)
-    val pressedColor = TransparentGrey.copy(alpha = 0.5f)
+    val baseColor = TransparentGrey.copy(alpha = 0.90f)
+    val pressedColor = TransparentGrey.copy(alpha = 0.75f)
 
     val borderColor = LightGrey
 

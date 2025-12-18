@@ -11,19 +11,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
-// import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.brave_sailors.ui.theme.Brave_SailorsTheme
 import com.example.brave_sailors.ui.utils.LockScreenOrientation
 
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // [ TO - DO ]: Add the dependency "implementation("androidx.core:core-splashscreen:1.0.1")" inside the "build.gradle.kts" file
-        // val splashScreen = installSplashScreen()
-        // splashScreen.setKeepOnScreenCondition { ... } until the forthcoming ViewModel's implementation is not ready
+        // [ TO - DO ]: Implement the splashscreen in such a way it waits until the ViewModel prepares the first screen ( if necessary )
+        installSplashScreen()
 
         super.onCreate(savedInstanceState)
 

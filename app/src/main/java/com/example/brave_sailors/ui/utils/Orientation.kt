@@ -21,7 +21,7 @@ fun LockScreenOrientation(isPortrait: Boolean) {
 
         if (activity != null) {
             if (currentState.value) {
-                if ((activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) || (activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT))
+                if((activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) && (activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT))
                     activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             }
             // else { ... }

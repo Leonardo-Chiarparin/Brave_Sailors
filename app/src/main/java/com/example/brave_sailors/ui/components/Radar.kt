@@ -49,7 +49,7 @@ fun Radar(modifier: Modifier) {
         label = "RadarAngle"
     )
 
-    val gapBetweenCircles = with(density){ scale.dp(14f).toPx() }
+    val gapBetweenCircles = with(density){ scale.dp(14f).toPx() } // blips' radius * 2f
 
     BoxWithConstraints(modifier = modifier) {
         val outerRadius = constraints.maxWidth.coerceAtMost(constraints.maxHeight).toFloat() / 2f
@@ -60,19 +60,19 @@ fun Radar(modifier: Modifier) {
         val blips = remember(density, constraints) {
             generateBlips(
                 count = 5,
-                minDistance = with(density){ scale.dp(14f).toPx()}, // blips' radius * 2f
+                minDistance = gapBetweenCircles * 1.25f,
                 minRadius = with(density) { scale.dp((1f - innerBoundaryRatio) / 2f).toPx() },
                 maxRadius = with(density) { scale.dp(innerBoundaryRatio / 2f).toPx() },
                 outerRadius = outerRadius
             )
         }
 
-        drawRadar(angle, blips, innerRadius, outerRadius)
+        DrawRadar(angle, blips, innerRadius, outerRadius)
     }
 }
 
 @Composable
-fun drawRadar(angle: Float, blips: List<RadarBlip>, innerRadius: Float, outerRadius: Float) {
+fun DrawRadar(angle: Float, blips: List<RadarBlip>, innerRadius: Float, outerRadius: Float) {
     val scale = RememberScaleConversion()
 
     Canvas(modifier = Modifier.fillMaxSize()) {
