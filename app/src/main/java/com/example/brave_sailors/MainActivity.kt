@@ -7,61 +7,91 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.brave_sailors.data.local.database.AppDatabase
+import com.example.brave_sailors.ProfileScreen
+import com.example.brave_sailors.TermsScreen
+import com.example.brave_sailors.ui.model.ProfileViewModel
+import com.example.brave_sailors.ui.model.ProfileViewModelFactory
 import com.example.brave_sailors.ui.theme.Brave_SailorsTheme
 import com.example.brave_sailors.ui.utils.LockScreenOrientation
+import com.google.android.gms.auth.api.signin.GoogleSignIn
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // [ TO - DO ]: Implement the splashscreen in such a way it waits until the ViewModel prepares the first screen ( if necessary )
         installSplashScreen()
-
         super.onCreate(savedInstanceState)
 
-        // [ TO - DO ]: Change the theme according to the current page ( if necessary )
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(
-                android.graphics.Color.TRANSPARENT
-            ),
-            navigationBarStyle = SystemBarStyle.dark(
-                android.graphics.Color.TRANSPARENT
-            )
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
 
-        // Immersive Sticky Mode
         val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
+        // Database
+        val db = AppDatabase.getDatabase(this)
+        val userDao = db.userDao()
+
         setContent {
             Brave_SailorsTheme {
-                // [ TO - DO ]: User's preferences regarding the screen orientation should be managed through a proper variable, whose state will be changed according to the settings inside the correspondent page ( accessible via Menu.kt )
-                // e.g., val orientation by settingsViewModel.isPortrait.collectAsState(initial = true)
-                // [ NOTE ]: Landscape shapes of the pages will be implemented as soon as possible
                 LockScreenOrientation(isPortrait = true)
+
+                val navController = rememberNavController()
+
+                // ViewModel condiviso o inizializzato qui
+                val profileViewModel: ProfileViewModel = viewModel(
+                    factory = ProfileViewModelFactory(userDao)
+                )
 
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     containerColor = Color.Transparent
                 ) { innerPadding ->
-                    TermsScreen(innerPadding)
+
+                    NavHost(navController = navController, startDestination = "terms") {
+
+                        // SCHERMATA 1: Termini e Login
+                        composable("terms") {
+                            TermsScreen(
+                                innerPadding = innerPadding,
+                                onStartApp = { // Al click di START:
+                                    // 1. Recupera l'ID Google
+                                    val account = GoogleSignIn.getLastSignedInAccount(this@MainActivity)
+                                    val userId = account?.id ?: "guest_id"
+
+                                    // 2. Carica i dati nel ViewModel (così il profilo è pronto)
+                                    profileViewModel.loadUser(userId)
+
+                                    // 3. Naviga al Profilo
+                                    navController.navigate("profile") {
+                                        popUpTo("terms") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+
+                        // SCHERMATA 2: Profilo
+                        composable("profile") {
+                            ProfileScreen(
+                                paddingValues = innerPadding,
+                                viewModel = profileViewModel
+                            )
+                        }
+                    }
                 }
             }
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun Preview() {
-    Brave_SailorsTheme {
-        TermsScreen()
     }
 }

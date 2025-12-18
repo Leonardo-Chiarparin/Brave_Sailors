@@ -8,5 +8,6 @@ data class User(
     @PrimaryKey val id: String,
     val name: String,
     val email: String,
-    val profilePictureUrl: String?
+    val profilePictureUrl: String?,
+    val lastUpdated: Long = System.currentTimeMillis()
 )
