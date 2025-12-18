@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
 
                 val navController = rememberNavController()
 
-                // ViewModel condiviso o inizializzato qui
+
                 val profileViewModel: ProfileViewModel = viewModel(
                     factory = ProfileViewModelFactory(userDao)
                 )
@@ -62,19 +62,19 @@ class MainActivity : ComponentActivity() {
 
                     NavHost(navController = navController, startDestination = "terms") {
 
-                        // SCHERMATA 1: Termini e Login
+
                         composable("terms") {
                             TermsScreen(
                                 innerPadding = innerPadding,
-                                onStartApp = { // Al click di START:
-                                    // 1. Recupera l'ID Google
+                                onStartApp = {
+
                                     val account = GoogleSignIn.getLastSignedInAccount(this@MainActivity)
                                     val userId = account?.id ?: "guest_id"
 
-                                    // 2. Carica i dati nel ViewModel (così il profilo è pronto)
+
                                     profileViewModel.loadUser(userId)
 
-                                    // 3. Naviga al Profilo
+
                                     navController.navigate("profile") {
                                         popUpTo("terms") { inclusive = true }
                                     }
@@ -82,7 +82,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // SCHERMATA 2: Profilo
                         composable("profile") {
                             ProfileScreen(
                                 paddingValues = innerPadding,

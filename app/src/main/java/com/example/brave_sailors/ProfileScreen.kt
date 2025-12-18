@@ -12,8 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items // <--- FONDAMENTALE PER LA LISTA
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,7 +21,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -32,7 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign // <--- AGGIUNTO: Risolve l'errore TextAlign
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -45,7 +43,7 @@ import com.example.brave_sailors.ui.theme.*
 import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.model.ProfileViewModel
 
-// Data class locale
+// Local data class for flags
 data class Flag(val name: String, val resourceId: Int)
 
 val availableFlags = listOf(
@@ -65,10 +63,11 @@ fun ProfileScreen(
     var showFlagDialog by remember { mutableStateOf(false) }
     var selectedFlag by remember { mutableStateOf(availableFlags.first()) }
 
-    // Launcher Fotocamera
+    // Camera Launcher
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap: Bitmap? ->
+        // As soon as taken, send it to the ViewModel which will make it B/W and save it
         bitmap?.let { viewModel.updateProfilePicture(context, it) }
     }
 
@@ -86,14 +85,17 @@ fun ProfileScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(paddingValues).background(DeepBlue)
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .background(DeepBlue)
     ) {
-        // Barra Superiore
+        // Upper Bar
         Box(modifier = Modifier.fillMaxWidth().height(LocalConfiguration.current.screenHeightDp.dp * 0.12f)) {
             BarPattern(color = White.copy(alpha = 0.05f))
         }
 
-        // Area Centrale
+        // Central Area
         Box(
             modifier = Modifier.weight(1f).fillMaxWidth().background(DarkBlue),
             contentAlignment = Alignment.TopCenter
@@ -106,7 +108,7 @@ fun ProfileScreen(
             ) {
                 Spacer(modifier = Modifier.height(64.dp))
 
-                // Riga Nome Utente
+                // Username Row
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(modifier = Modifier.weight(1f), color = Blue, shape = RoundedCornerShape(4.dp)) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -122,10 +124,10 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Portrait e Flag
+                // Portrait and Flag
                 Row(modifier = Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
 
-                    // --- ITEM PORTRAIT ---
+                    // --- PORTRAIT ITEM WITH CAMERA ---
                     ProfileCustomizationItem(
                         modifier = Modifier.weight(1f).clickable {
                             permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -133,15 +135,14 @@ fun ProfileScreen(
                         title = "Portrait"
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            // 1. IMMAGINE DI SFONDO
+                            // 1. Image (which will be shown in black and white from the DB)
                             val path = user?.profilePictureUrl
                             if (!path.isNullOrEmpty()) {
                                 AsyncImage(
-                                    // TRUCCO: Usiamo 'lastUpdated' come firma.
-                                    // Se il timestamp cambia, Coil ricarica l'immagine anche se il nome file è uguale.
                                     model = ImageRequest.Builder(LocalContext.current)
                                         .data(path)
                                         .crossfade(true)
+                                        // Use lastUpdated to force refresh if the image changes
                                         .setParameter("key", user?.lastUpdated ?: System.currentTimeMillis())
                                         .build(),
                                     contentDescription = "Profile Photo",
@@ -152,35 +153,40 @@ fun ProfileScreen(
                                 Icon(Icons.Default.Person, null, modifier = Modifier.size(50.dp), tint = White)
                             }
 
-                            // 2. ICONA FOTOCAMERA SOVRAPPOSTA (Overlay)
+                            // 2. Camera Icon Overlay
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.3f)), // Velo scuro leggero
+                                    .background(Color.Black.copy(alpha = 0.3f)), // Light dark overlay
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PhotoCamera,
-                                    contentDescription = "Tap to take photo",
-                                    tint = White.copy(alpha = 0.8f),
-                                    modifier = Modifier.size(32.dp)
+                                    contentDescription = "Take Photo",
+                                    tint = White.copy(alpha = 0.9f),
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
                         }
                     }
 
-                    // --- ITEM FLAG ---
+                    // --- FLAG ITEM ---
                     ProfileCustomizationItem(
                         modifier = Modifier.weight(1f).clickable { showFlagDialog = true },
                         title = "Flag"
                     ) {
-                        Image(painterResource(selectedFlag.resourceId), null, Modifier.fillMaxSize().padding(16.dp), contentScale = ContentScale.Fit)
+                        Image(
+                            painter = painterResource(selectedFlag.resourceId),
+                            contentDescription = selectedFlag.name,
+                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            contentScale = ContentScale.Fit
+                        )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Pulsanti Azione
+                // Action Buttons
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ProfileActionButton(Modifier.weight(1f), "Stats", Icons.Default.BarChart)
                     ProfileActionButton(Modifier.weight(1f), "Rank", Icons.Default.EmojiEvents)
@@ -196,7 +202,8 @@ fun ProfileScreen(
     }
 }
 
-// --- COMPONENTI UI ---
+// --- STANDARD UI COMPONENTS ---
+
 @Composable fun HeaderTab(text: String) {
     Surface(color = Orange, shape = CutCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp), modifier = Modifier.zIndex(2f)) {
         Text(text, Modifier.padding(horizontal = 24.dp, vertical = 8.dp), color = DeepBlue, fontWeight = FontWeight.ExtraBold)
@@ -228,7 +235,6 @@ fun ProfileScreen(
     Surface(modifier.height(90.dp).clickable {}, shape = CutCornerShape(8.dp), color = Blue, border = BorderStroke(1.dp, TransparentGrey)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(icon, null, tint = Orange, modifier = Modifier.size(28.dp))
-            // FIX: Ora TextAlign è importato e non darà errore
             Text(title, color = White, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         }
     }
@@ -241,7 +247,6 @@ fun FlagSelectionDialog(onDismiss: () -> Unit, onFlagSelected: (Flag) -> Unit) {
             Column {
                 Text("SELECT FLAG", Modifier.padding(16.dp), color = White, fontWeight = FontWeight.Bold)
                 LazyColumn(Modifier.heightIn(max = 400.dp)) {
-                    // FIX: Grazie all'import androidx.compose.foundation.lazy.items, questo ora funziona
                     items(availableFlags) { flag ->
                         Row(Modifier.fillMaxWidth().clickable { onFlagSelected(flag) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Image(painterResource(flag.resourceId), null, Modifier.size(40.dp, 25.dp))

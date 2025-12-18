@@ -6,7 +6,6 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.brave_sailors.data.local.database.entity.User
 
-// Se hai cambiato la Entity User, è buona norma incrementare la versione (es. da 1 a 2)
 @Database(entities = [User::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
@@ -23,8 +22,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "user_database"
                 )
-                    // --- QUESTA RIGA EVITA IL CRASH DURANTE LO SVILUPPO ---
-                    .fallbackToDestructiveMigration()
+                     .fallbackToDestructiveMigration()
                     .build()
 
                 INSTANCE = instance
