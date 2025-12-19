@@ -78,6 +78,7 @@ dependencies {
     implementation(libs.play.services.auth)
     ksp("androidx.room:room-compiler:2.8.3")
     implementation("androidx.navigation:navigation-compose:2.8.5")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

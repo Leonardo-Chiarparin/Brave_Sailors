@@ -9,5 +9,6 @@ data class User(
     val name: String,
     val email: String,
     val profilePictureUrl: String?,
+    val countryCode: String? = null,
     val lastUpdated: Long = System.currentTimeMillis()
 )

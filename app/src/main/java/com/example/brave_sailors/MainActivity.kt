@@ -18,10 +18,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.brave_sailors.data.local.database.AppDatabase
-import com.example.brave_sailors.ProfileScreen
-import com.example.brave_sailors.TermsScreen
-import com.example.brave_sailors.ui.model.ProfileViewModel
-import com.example.brave_sailors.ui.model.ProfileViewModelFactory
+import com.example.brave_sailors.model.*
+import com.example.brave_sailors.model.ProfileViewModelFactory
+import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.theme.Brave_SailorsTheme
 import com.example.brave_sailors.ui.utils.LockScreenOrientation
 import com.google.android.gms.auth.api.signin.GoogleSignIn

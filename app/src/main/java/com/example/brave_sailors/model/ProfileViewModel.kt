@@ -1,4 +1,4 @@
-package com.example.brave_sailors.ui.model
+package com.example.brave_sailors.model
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.brave_sailors.data.local.database.UserDao
@@ -13,6 +14,7 @@ import com.example.brave_sailors.data.local.database.entity.User
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -25,44 +27,70 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
 
     fun loadUser(userId: String) {
         viewModelScope.launch {
-            val user = userDao.getUserById(userId)
-            _userState.value = user
+            userDao.observeUserById(userId).collectLatest { user ->
+                _userState.value = user
+            }
         }
     }
 
+    // --- FIX: METODO SICURO PER AGGIORNARE LA NAZIONE ---
+    fun updateCountry(countryCode: String) {
+        val currentUser = _userState.value
+
+        if (currentUser == null) {
+            Log.e("ProfileViewModel", "ERRORE: Utente null, impossibile aggiornare.")
+            return
+        }
+
+        // Creiamo una copia dell'utente con la nuova nazione
+        val updatedUser = currentUser.copy(countryCode = countryCode)
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Usiamo il metodo generico @Update di Room
+                // Room capisce da solo quali colonne aggiornare
+                userDao.updateUser(updatedUser)
+                Log.d("ProfileViewModel", "Nazione aggiornata a: $countryCode")
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "Errore salvataggio nazione: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+    fun updateName(newName: String) {
+        viewModelScope.launch {
+            // Recupera l'utente corrente o il suo ID (in base a come gestisci lo stato)
+            val currentUser = userState.value
+            if (currentUser != null && newName.isNotBlank()) {
+                userDao.updateUserName(currentUser.id, newName)
+                // Se usi un Flow per userState, l'aggiornamento della UI sarà automatico
+            }
+        }
+    }
     fun updateProfilePicture(context: Context, originalBitmap: Bitmap) {
         val currentUser = _userState.value ?: return
 
         viewModelScope.launch {
             try {
-                // 1. PROCESSING: Convert to Black and White (Grayscale)
-                // Use Default dispatcher for CPU-intensive calculations
                 val processedBitmap = withContext(Dispatchers.Default) {
                     applyGrayscaleToBitmap(originalBitmap)
                 }
 
-                // 2. SAVING: Write the processed file
+                val updateTime = System.currentTimeMillis()
                 val filePath = withContext(Dispatchers.IO) {
                     val fileName = "avatar_${currentUser.id}.jpg"
                     val file = File(context.filesDir, fileName)
-
                     FileOutputStream(file).use { out ->
                         processedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
                     }
                     file.absolutePath
                 }
 
-                // 3. DB UPDATE
-                val updatedUser = currentUser.copy(
-                    profilePictureUrl = filePath,
-                    lastUpdated = System.currentTimeMillis() // Forces UI refresh
-                )
-
+                // Anche qui, per coerenza, potresti usare updateUser,
+                // ma la query specifica va bene se i nomi colonne sono corretti.
                 withContext(Dispatchers.IO) {
-                    userDao.updateUser(updatedUser)
+                    userDao.updateProfilePicture(currentUser.id, filePath, updateTime)
                 }
-
-                _userState.value = updatedUser
 
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -70,28 +98,16 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
         }
     }
 
-    /**
-     * Native Android function to convert to Grayscale.
-     * Equivalent to OpenCV's Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGBA2GRAY),
-     * but does not require heavy external libraries.
-     */
     private fun applyGrayscaleToBitmap(src: Bitmap): Bitmap {
         val width = src.width
         val height = src.height
-
-        // Create a destination bitmap
         val dest = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-
         val canvas = Canvas(dest)
         val paint = Paint()
-
-        // Saturation matrix at 0 = Black and White
         val colorMatrix = ColorMatrix()
         colorMatrix.setSaturation(0f)
-
         val filter = ColorMatrixColorFilter(colorMatrix)
         paint.colorFilter = filter
-
         canvas.drawBitmap(src, 0f, 0f, paint)
         return dest
     }

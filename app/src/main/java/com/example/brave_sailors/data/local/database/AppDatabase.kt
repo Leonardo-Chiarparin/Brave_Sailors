@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.brave_sailors.data.local.database.entity.User
 
+// 1. INCREMENTA LA VERSIONE (es. da 1 a 2)
 @Database(entities = [User::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
@@ -20,11 +21,10 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "user_database"
+                    "brave_sailors_db"
                 )
-                     .fallbackToDestructiveMigration()
+                   .fallbackToDestructiveMigration()
                     .build()
-
                 INSTANCE = instance
                 instance
             }
