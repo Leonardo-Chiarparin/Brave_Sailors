@@ -1,6 +1,14 @@
 package com.example.brave_sailors
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Geocoder
+import android.os.Build
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -24,6 +32,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -33,12 +42,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.ui.res.stringResource
 import coil.compose.AsyncImage
 import com.example.brave_sailors.data.local.database.AppDatabase
+import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.domain.use_case.GoogleSigningUseCase
 import com.example.brave_sailors.domain.use_case.OpenPrivacyPolicyUseCase
 import com.example.brave_sailors.domain.use_case.SigningResult
@@ -47,8 +57,12 @@ import com.example.brave_sailors.ui.components.*
 import com.example.brave_sailors.ui.theme.*
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 import com.example.brave_sailors.ui.utils.findActivity
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 @Composable
 fun TermsScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: ProfileViewModel, onStartApp: () -> Unit) {
@@ -97,10 +111,13 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
     var playerEmail by remember { mutableStateOf("") }
     var playerName by remember { mutableStateOf("Sailor") }
     var playerPhoto by remember { mutableStateOf<String?>(null) }
-    
+
     // We hold the user object returned by login until "START" is pressed (for new users)
-    var pendingUser by remember { mutableStateOf<com.example.brave_sailors.data.local.database.entity.User?>(null) }
+    var pendingUser by remember { mutableStateOf<User?>(null) }
     var isNewUser by remember { mutableStateOf(false) }
+
+    // Detected Country State
+    var detectedCountryCode by remember { mutableStateOf<String?>(null) }
 
     val openPrivacyPolicy = remember { OpenPrivacyPolicyUseCase() }
     val privacyUrl = stringResource(R.string.privacy_policy)
@@ -109,6 +126,23 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
     val googleSigning = remember(context) {
         val db = AppDatabase.getDatabase(context)
         GoogleSigningUseCase(db.userDao(), webClientID)
+    }
+
+    // Location Permission
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+
+        if (fineGranted || coarseGranted) {
+            detectCountryFromLocation(context) { countryCode ->
+                val foundFlag = availableFlags.find { it.code.equals(countryCode, ignoreCase = true) }
+                if (foundFlag != null) {
+                    detectedCountryCode = foundFlag.code
+                }
+            }
+        }
     }
 
     fun performLogin() {
@@ -122,7 +156,7 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                         playerName = user.name
                         playerEmail = user.email
                         playerPhoto = user.profilePictureUrl
-                        
+
                         pendingUser = user
                         isNewUser = result.isNewUser
 
@@ -170,6 +204,21 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
         if (!didLogin) {
             didLogin = true
             performLogin()
+        }
+
+        // Location check
+        val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+        if (hasFine || hasCoarse) {
+            detectCountryFromLocation(context) { countryCode ->
+                val foundFlag = availableFlags.find { it.code.equals(countryCode, ignoreCase = true) }
+                if (foundFlag != null) {
+                    detectedCountryCode = foundFlag.code
+                }
+            }
+        } else {
+            locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     }
 
@@ -387,14 +436,18 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                             112f,
                             28f,
                             text = "START",
-                            onClick = { 
+                            onClick = {
                                 if (isNewUser) {
-                                    pendingUser?.let { 
-                                        viewModel.registerUser(it)
-                                        viewModel.loadUser(it.id)
+                                    pendingUser?.let { user ->
+                                        val finalUser = if (detectedCountryCode != null) {
+                                            user.copy(countryCode = detectedCountryCode!!)
+                                        } else user
+
+                                        viewModel.registerUser(finalUser)
+                                        viewModel.loadUser(finalUser.id)
                                     }
                                 }
-                                onStartApp() 
+                                onStartApp()
                             },
                             enabled = privacyAccepted
                         )
@@ -408,5 +461,45 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
         Box(modifier = Modifier.zIndex(1f)) {
             Tab(130f, 32f, text = "Consensus")
         }
+    }
+}
+
+// Helper Functions
+@SuppressLint("MissingPermission")
+fun detectCountryFromLocation(context: Context, onCountryFound: (String) -> Unit) {
+    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+    val cancelTokenSource = CancellationTokenSource()
+
+    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+        if (location != null) {
+            decodeAndNotify(context, location, onCountryFound)
+        } else {
+            val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val priority = if (hasFine) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY
+
+            fusedLocationClient.getCurrentLocation(priority, cancelTokenSource.token)
+                .addOnSuccessListener { newLocation ->
+                    if (newLocation != null) {
+                        decodeAndNotify(context, newLocation, onCountryFound)
+                    }
+                }
+        }
+    }
+}
+
+fun decodeAndNotify(context: Context, location: android.location.Location, onCountryFound: (String) -> Unit) {
+    try {
+        val geocoder = Geocoder(context, Locale.getDefault())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            geocoder.getFromLocation(location.latitude, location.longitude, 1) { addresses ->
+                if (addresses.isNotEmpty()) onCountryFound(addresses[0].countryCode)
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+            if (!addresses.isNullOrEmpty()) onCountryFound(addresses[0].countryCode)
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
     }
 }

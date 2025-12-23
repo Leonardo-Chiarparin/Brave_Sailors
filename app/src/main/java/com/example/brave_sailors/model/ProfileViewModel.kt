@@ -24,7 +24,7 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
 
     private val _userState = MutableStateFlow<User?>(null)
     val userState: StateFlow<User?> = _userState
-    
+
     var showHomeWelcome: Boolean = false
 
     fun loadUser(userId: String) {
@@ -60,34 +60,41 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
             try {
                 userDao.updateUser(updatedUser)
                 Log.d("ProfileViewModel", "Country has been changed to: $countryCode")
+                // Aggiorniamo lo stato locale subito
+                _userState.value = updatedUser
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "Error during the update: ${e.message}")
                 e.printStackTrace()
             }
         }
     }
-    fun updateName(newName: String) {
-        viewModelScope.launch {
-            val currentUser = userState.value
 
+    fun updateName(newName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentUser = userState.value
             if (currentUser != null && newName.isNotBlank()) {
-                userDao.updateUserName(currentUser.id, newName)
+                 userDao.updateUserName(currentUser.id, newName)
+
+                val updatedUser = currentUser.copy(name = newName)
+                _userState.value = updatedUser
             }
         }
     }
-    fun updateProfilePicture(context: Context, originalBitmap: Bitmap) {
+
+    fun updateProfilePicture(context: Context, bitmap: Bitmap) {
         val currentUser = _userState.value ?: return
 
         viewModelScope.launch {
             try {
-                val processedBitmap = withContext(Dispatchers.Default) {
-                    applyGrayscaleToBitmap(originalBitmap)
-                }
+                val processedBitmap = bitmap
 
                 val updateTime = System.currentTimeMillis()
+
                 val filePath = withContext(Dispatchers.IO) {
                     val fileName = "avatar_${currentUser.id}.jpg"
                     val file = File(context.filesDir, fileName)
+
+                    if (file.exists()) file.delete()
 
                     FileOutputStream(file).use { out ->
                         processedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
@@ -98,6 +105,12 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
 
                 withContext(Dispatchers.IO) {
                     userDao.updateProfilePicture(currentUser.id, filePath, updateTime)
+
+                    val updatedUser = currentUser.copy(
+                        profilePictureUrl = filePath,
+                        lastUpdated = updateTime
+                    )
+                    _userState.value = updatedUser
                 }
 
             } catch (e: Exception) {
