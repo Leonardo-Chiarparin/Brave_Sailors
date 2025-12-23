@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.PlatformTextStyle
@@ -78,7 +79,8 @@ private fun Modal() {
 
     Box(
         modifier = Modifier
-            .fillMaxSize(),
+            .fillMaxSize()
+            .graphicsLayer(),
         contentAlignment = Alignment.TopCenter
     ) {
         GridBackground(Modifier.matchParentSize(), color = DarkGrey,14f)

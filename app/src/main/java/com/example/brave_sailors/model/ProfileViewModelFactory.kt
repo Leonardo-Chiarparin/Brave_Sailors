@@ -12,6 +12,6 @@ class ProfileViewModelFactory(private val userDao: UserDao) : ViewModelProvider.
             @Suppress("UNCHECKED_CAST")
             return ProfileViewModel(userDao) as T
         }
-        throw IllegalArgumentException("Class ViewModel unknown")
+        throw IllegalArgumentException("Unknown class \"ViewModel\".")
     }
 }

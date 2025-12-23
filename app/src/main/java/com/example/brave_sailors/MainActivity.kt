@@ -7,9 +7,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -22,35 +23,35 @@ import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.model.ProfileViewModelFactory
 import com.example.brave_sailors.ui.theme.Brave_SailorsTheme
 import com.example.brave_sailors.ui.utils.LockScreenOrientation
-import com.google.android.gms.auth.api.signin.GoogleSignIn
 
 class MainActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
         super.onCreate(savedInstanceState)
 
+        // [ TO - DO ]: Change the theme according to the current page ( if necessary )
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+            statusBarStyle = SystemBarStyle.dark(
+                android.graphics.Color.TRANSPARENT
+            ),
+            navigationBarStyle = SystemBarStyle.dark(
+                android.graphics.Color.TRANSPARENT
+            )
         )
 
-        val windowInsetsController =
-            WindowCompat.getInsetsController(window, window.decorView)
-
-        windowInsetsController.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-
+        // Immersive Sticky Mode
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
-        // ───────── DATABASE ─────────
+        // Database
         val db = AppDatabase.getDatabase(this)
         val userDao = db.userDao()
 
         setContent {
             Brave_SailorsTheme {
-
-                // Blocca orientamento (come già fai)
+                // [ TO - DO ]: User's preferences regarding the screen orientation should be managed through a proper variable, whose state will be changed according to the settings inside the correspondent page ( accessible via Menu.kt )
+                // e.g., val orientation by settingsViewModel.isPortrait.collectAsState(initial = true)
+                // [ NOTE ]: Landscape shapes of the pages will be implemented as soon as possible
                 LockScreenOrientation(isPortrait = true)
 
                 val navController = rememberNavController()
@@ -64,83 +65,23 @@ class MainActivity : ComponentActivity() {
                     containerColor = Color.Transparent
                 ) { innerPadding ->
 
-                    NavHost(
-                        navController = navController,
-                        startDestination = "terms"
-                    ) {
-
-                        // ───────── TERMS ─────────
+                    NavHost(navController = navController, startDestination = "terms") {
                         composable("terms") {
                             TermsScreen(
                                 innerPadding = innerPadding,
+                                viewModel = profileViewModel,
                                 onStartApp = {
-                                    val account =
-                                        GoogleSignIn.getLastSignedInAccount(this@MainActivity)
-
-                                    val userId = account?.id ?: "guest_id"
-
-                                    profileViewModel.loadUser(userId)
-
-                                    // Dopo i termini → MENU
-                                    navController.navigate("menu") {
+                                    navController.navigate("home") {
                                         popUpTo("terms") { inclusive = true }
                                     }
                                 }
                             )
                         }
 
-                        // ───────── MENU ─────────
-                        composable("menu") {
-                            MenuScreen(
-                                onGameOptions = {
-                                    // 🔥 CLICK SU GAME OPTIONS
-                                    navController.navigate("game_options")
-                                },
-                                onSettings = {
-                                    // TODO: SettingsScreen
-                                },
-                                onInstructions = {
-                                    // TODO: InstructionsScreen
-                                }
-                            )
-                        }
-
-                        // ───────── GAME OPTIONS ─────────
-                        composable("game_options") {
-                            GameOptionsScreen(
-                                onStartBattle = {
-                                    // TODO: GameScreen (Fleet Battle)
-                                }
-                            )
-                        }
-
-                        // ───────── PROFILE ─────────
-                        composable("profile") {
-                            ProfileScreen(
-                                paddingValues = innerPadding,
-                                viewModel = profileViewModel,
-                                onLeaderboardClick = {
-                                    navController.navigate("leaderboard")
-                                },
-                                onStatsClick = {
-                                    navController.navigate("stats")
-                                }
-                            )
-                        }
-
-                        // ───────── LEADERBOARD ─────────
-                        composable("leaderboard") {
-                            LeaderboardScreen(
-                                onBackClick = { navController.popBackStack() },
-                                paddingValues = innerPadding
-                            )
-                        }
-
-                        // ───────── STATS ─────────
-                        composable("stats") {
-                            StatsScreen(
-                                onBackClick = { navController.popBackStack() },
-                                paddingValues = innerPadding
+                        composable("home") {
+                            HomeScreen(
+                                innerPadding = innerPadding,
+                                viewModel = profileViewModel
                             )
                         }
                     }
@@ -149,3 +90,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+/*
+    @Preview(showBackground = true)
+    @Composable
+    fun Preview() {
+        Brave_SailorsTheme {
+            HomeScreen()
+        }
+    }
+*/

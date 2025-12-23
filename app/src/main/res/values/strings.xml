@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">Brave Sailors</string>
     <string name="game_services_project_id">101333280904</string>
+    <string name="privacy_policy">https://privacy-service-101333280904.europe-west1.run.app/privacy-policy</string>
+    <string name="web_client">101333280904-c5h9ok4seffc3phjuo3fo4tmcpel1rp0.apps.googleusercontent.com</string>
 </resources>

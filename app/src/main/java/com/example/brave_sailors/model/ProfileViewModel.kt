@@ -33,37 +33,32 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
         }
     }
 
-    // --- FIX: METODO SICURO PER AGGIORNARE LA NAZIONE ---
     fun updateCountry(countryCode: String) {
         val currentUser = _userState.value
 
         if (currentUser == null) {
-            Log.e("ProfileViewModel", "ERRORE: Utente null, impossibile aggiornare.")
+            Log.e("ProfileViewModel", "Error: User is null.")
             return
         }
 
-        // Creiamo una copia dell'utente con la nuova nazione
         val updatedUser = currentUser.copy(countryCode = countryCode)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Usiamo il metodo generico @Update di Room
-                // Room capisce da solo quali colonne aggiornare
                 userDao.updateUser(updatedUser)
-                Log.d("ProfileViewModel", "Nazione aggiornata a: $countryCode")
+                Log.d("ProfileViewModel", "Country has been changed to: $countryCode")
             } catch (e: Exception) {
-                Log.e("ProfileViewModel", "Errore salvataggio nazione: ${e.message}")
+                Log.e("ProfileViewModel", "Error during the update: ${e.message}")
                 e.printStackTrace()
             }
         }
     }
     fun updateName(newName: String) {
         viewModelScope.launch {
-            // Recupera l'utente corrente o il suo ID (in base a come gestisci lo stato)
             val currentUser = userState.value
+
             if (currentUser != null && newName.isNotBlank()) {
                 userDao.updateUserName(currentUser.id, newName)
-                // Se usi un Flow per userState, l'aggiornamento della UI sarà automatico
             }
         }
     }
@@ -80,14 +75,14 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
                 val filePath = withContext(Dispatchers.IO) {
                     val fileName = "avatar_${currentUser.id}.jpg"
                     val file = File(context.filesDir, fileName)
+
                     FileOutputStream(file).use { out ->
                         processedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
                     }
+
                     file.absolutePath
                 }
 
-                // Anche qui, per coerenza, potresti usare updateUser,
-                // ma la query specifica va bene se i nomi colonne sono corretti.
                 withContext(Dispatchers.IO) {
                     userDao.updateProfilePicture(currentUser.id, filePath, updateTime)
                 }
@@ -105,10 +100,14 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
         val canvas = Canvas(dest)
         val paint = Paint()
         val colorMatrix = ColorMatrix()
+
         colorMatrix.setSaturation(0f)
+
         val filter = ColorMatrixColorFilter(colorMatrix)
+
         paint.colorFilter = filter
         canvas.drawBitmap(src, 0f, 0f, paint)
+
         return dest
     }
 }
