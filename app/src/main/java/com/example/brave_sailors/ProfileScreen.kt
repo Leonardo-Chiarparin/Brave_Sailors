@@ -67,7 +67,9 @@ val availableFlags = listOf(
 @Composable
 fun ProfileScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
-    viewModel: ProfileViewModel
+    viewModel: ProfileViewModel,
+    onLeaderboardClick: () -> Unit = {},
+    onStatsClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     // Observing user state from DB (Room)
@@ -255,8 +257,8 @@ fun ProfileScreen(
 
                 // Action Buttons
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ProfileActionButton(Modifier.weight(1f), "Stats", Icons.Default.BarChart)
-                    ProfileActionButton(Modifier.weight(1f), "Rank", Icons.Default.EmojiEvents)
+                    ProfileActionButton(Modifier.weight(1f), "Stats", Icons.Default.BarChart, onClick = onStatsClick)
+                    ProfileActionButton(Modifier.weight(1f), "Rank", Icons.Default.EmojiEvents, onClick = onLeaderboardClick)
                     ProfileActionButton(Modifier.weight(1f), "Fleet", Icons.Default.ViewModule)
                 }
             }
@@ -288,12 +290,12 @@ fun detectCountryFromLocation(context: Context, onCountryFound: (String) -> Unit
                     if (newLocation != null) {
                         decodeAndNotify(context, newLocation, onCountryFound)
                     } else {
-                        android.widget.Toast.makeText(context, "Impossibile trovare posizione. Attiva il GPS!", android.widget.Toast.LENGTH_LONG).show()
+                        android.widget.Toast.makeText(context, "Could not find location. Activate GPS!", android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
                 .addOnFailureListener {
                     it.printStackTrace()
-                    android.widget.Toast.makeText(context, "Errore GPS: ${it.message}", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, "Error GPS: ${it.message}", android.widget.Toast.LENGTH_LONG).show()
                 }
         }
     }
@@ -333,8 +335,8 @@ fun decodeAndNotify(context: Context, location: android.location.Location, onCou
     }
 }
 
-@Composable fun ProfileActionButton(modifier: Modifier, title: String, icon: ImageVector) {
-    Surface(modifier.height(90.dp).clickable {}, shape = CutCornerShape(8.dp), color = Blue, border = BorderStroke(1.dp, TransparentGrey)) {
+@Composable fun ProfileActionButton(modifier: Modifier, title: String, icon: ImageVector, onClick: () -> Unit = {}) {
+    Surface(modifier.height(90.dp).clickable { onClick() }, shape = CutCornerShape(8.dp), color = Blue, border = BorderStroke(1.dp, TransparentGrey)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(icon, null, tint = Orange, modifier = Modifier.size(28.dp))
             Text(title, color = White, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
@@ -362,7 +364,6 @@ fun FlagSelectionDialog(onDismiss: () -> Unit, onFlagSelected: (Flag) -> Unit) {
     }
 }
 
-// --- [NEW] CHANGE NAME DIALOG COMPONENT ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChangeNameDialog(
