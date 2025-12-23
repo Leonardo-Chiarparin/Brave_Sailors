@@ -11,18 +11,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.brave_sailors.data.local.database.AppDatabase
+import com.example.brave_sailors.model.ProfileViewModel
+import com.example.brave_sailors.model.ProfileViewModelFactory
 import com.example.brave_sailors.ui.theme.Brave_SailorsTheme
 import com.example.brave_sailors.ui.utils.LockScreenOrientation
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // [ TO - DO ]: Implement the splashscreen in such a way it waits until the ViewModel prepares the first screen ( if necessary )
-        installSplashScreen()
-
         super.onCreate(savedInstanceState)
 
         // [ TO - DO ]: Change the theme according to the current page ( if necessary )
@@ -40,6 +43,10 @@ class MainActivity : ComponentActivity() {
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
+        // Database
+        val db = AppDatabase.getDatabase(this)
+        val userDao = db.userDao()
+
         setContent {
             Brave_SailorsTheme {
                 // [ TO - DO ]: User's preferences regarding the screen orientation should be managed through a proper variable, whose state will be changed according to the settings inside the correspondent page ( accessible via Menu.kt )
@@ -47,21 +54,49 @@ class MainActivity : ComponentActivity() {
                 // [ NOTE ]: Landscape shapes of the pages will be implemented as soon as possible
                 LockScreenOrientation(isPortrait = true)
 
+                val navController = rememberNavController()
+
+                val profileViewModel: ProfileViewModel = viewModel(
+                    factory = ProfileViewModelFactory(userDao)
+                )
+
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     containerColor = Color.Transparent
                 ) { innerPadding ->
-                    TermsScreen(innerPadding)
+
+                    NavHost(navController = navController, startDestination = "terms") {
+                        composable("terms") {
+                            TermsScreen(
+                                innerPadding = innerPadding,
+                                viewModel = profileViewModel,
+                                onStartApp = {
+                                    navController.navigate("home") {
+                                        popUpTo("terms") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+
+                        composable("home") {
+                            HomeScreen(
+                                innerPadding = innerPadding,
+                                viewModel = profileViewModel
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun Preview() {
-    Brave_SailorsTheme {
-        TermsScreen()
+/*
+    @Preview(showBackground = true)
+    @Composable
+    fun Preview() {
+        Brave_SailorsTheme {
+            HomeScreen()
+        }
     }
-}
+*/

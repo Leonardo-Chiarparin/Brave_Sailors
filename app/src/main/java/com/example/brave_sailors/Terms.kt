@@ -1,9 +1,8 @@
 package com.example.brave_sailors
 
-import android.app.Activity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import android.util.Log
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -21,35 +20,38 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import coil.compose.AsyncImage
 import com.example.brave_sailors.data.local.database.AppDatabase
-import com.example.brave_sailors.data.local.database.entity.User
+import com.example.brave_sailors.domain.use_case.GoogleSigningUseCase
 import com.example.brave_sailors.domain.use_case.OpenPrivacyPolicyUseCase
+import com.example.brave_sailors.domain.use_case.SigningResult
+import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.components.*
 import com.example.brave_sailors.ui.theme.*
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
+import com.example.brave_sailors.ui.utils.findActivity
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.jvm.java
 
 @Composable
-fun TermsScreen(innerPadding: PaddingValues = PaddingValues(0.dp)) {
+fun TermsScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: ProfileViewModel, onStartApp: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -64,18 +66,18 @@ fun TermsScreen(innerPadding: PaddingValues = PaddingValues(0.dp)) {
                 .background(Blue),
             contentAlignment = Alignment.Center
         ) {
-            Modal()
+            Modal(viewModel = viewModel, onStartApp = onStartApp)
         }
     }
 }
 
 @Composable
-private fun Modal() {
+private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
 
-    // -- SCALE ( used for applying conversions )
+    // -- SCALE ( used for applying conversions ) --
     val scale = RememberScaleConversion()
 
     // [ MEMO ]: Sizes are taken from 720 x 1600px mockup ( with 72dpi ) using the Redmi Note 10S
@@ -83,104 +85,78 @@ private fun Modal() {
 
     val maxWidth = scale.dp(648f) // 648px, etc.
 
-    // -- STATE ( implemented to persist across recompositions )
+    // -- STATE ( implemented to persist across recompositions ) --
     var privacyAccepted by rememberSaveable { mutableStateOf(false) }
     var privacyLaunched by rememberSaveable { mutableStateOf(false) }
     var showPopup by remember { mutableStateOf(false) }
 
+    // -- AUTHENTICATION --
     var isSignedIn by rememberSaveable { mutableStateOf(false) }
     var isSigningIn by remember { mutableStateOf(false) }
 
-    var account by remember { mutableStateOf<GoogleSignInAccount?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
-
-    var playerName by remember { mutableStateOf("Player") }
+    var playerEmail by remember { mutableStateOf("") }
+    var playerName by remember { mutableStateOf("Sailor") }
     var playerPhoto by remember { mutableStateOf<String?>(null) }
 
     val openPrivacyPolicy = remember { OpenPrivacyPolicyUseCase() }
-    val privacyUrl = "https://privacy-service-101333280904.europe-west1.run.app/privacy-policy"
+    val privacyUrl = stringResource(R.string.privacy_policy)
     val userDao = remember(context) { AppDatabase.getDatabase(context).userDao() }
+    val webClientID = stringResource(R.string.web_client)
 
-    val options = remember {
-        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .requestProfile()
-            .build()
+    val googleSigning = remember(context) {
+        val db = AppDatabase.getDatabase(context)
+        GoogleSigningUseCase(db.userDao(), webClientID)
     }
 
-    val googleSignInClient = remember(context, options) { GoogleSignIn.getClient(context, options) }
+    fun performLogin() {
+        if (!isSigningIn) {
+            isSigningIn = true
 
-    val signInLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        isSigningIn = false
+            scope.launch {
+                when (val result = googleSigning(context)) {
+                    is SigningResult.Success -> {
+                        val user = result.user
+                        playerName = user.name
+                        playerEmail = user.email
+                        playerPhoto = user.profilePictureUrl
 
-        if (result.resultCode == Activity.RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                        viewModel.loadUser(user.id)
 
-            try {
-                account = task.getResult(ApiException::class.java)
+                        showPopup = true
+                        isSignedIn = true
+                        isSigningIn = false
+                    }
 
-                isSignedIn = true
-                message = null
+                    is SigningResult.Cancelled -> {
+                        Log.d("Auth", "Login cancelled.")
 
-                playerName = account?.displayName ?: "Sailor"
-                playerPhoto = account?.photoUrl?.toString() ?: "placeholder_avatar"
+                        delay(500)
 
-                account?.let { googleAccount ->
-                    scope.launch {
-                        val user = User(
-                            id = googleAccount.id!!,
-                            name = googleAccount.displayName ?: "Sailor",
-                            email = googleAccount.email!!,
-                            profilePictureUrl = googleAccount.photoUrl?.toString()
-                        )
-                        userDao.insertUser(user)
+                        isSigningIn = false
+                        performLogin()
+                    }
+
+                    is SigningResult.Error -> {
+                        Log.e("Auth", "Login error: ${result.msg}")
+
+                        delay(500)
+
+                        isSigningIn = false
+                        context.findActivity()?.recreate()
                     }
                 }
-
-                showPopup = true
-
-            } catch (e: ApiException) {
-                isSignedIn = false
-                message = "Login failed: (${e.statusCode})"
             }
-        } else {
-            message = "Login cancelled."
         }
+        else
+            return
     }
 
     var didLogin by remember { mutableStateOf(false) }
 
-    LaunchedEffect(didLogin) {
+    LaunchedEffect(Unit) {
         if (!didLogin) {
             didLogin = true
-            isSigningIn = true
-
-            val last = GoogleSignIn.getLastSignedInAccount(context)
-
-            if (last != null) {
-                account = last
-                isSignedIn = true
-                isSigningIn = false
-
-                playerName = last.displayName ?: "Sailor"
-                playerPhoto = last.photoUrl?.toString()
-
-                scope.launch {
-                    val user = User(
-                        id = last.id!!,
-                        name = last.displayName ?: "Sailor",
-                        email = last.email!!,
-                        profilePictureUrl = last.photoUrl?.toString()
-                    )
-                    userDao.insertUser(user)
-                }
-
-                showPopup = true
-            }
-            else
-                signInLauncher.launch(googleSignInClient.signInIntent)
+            performLogin()
         }
     }
 
@@ -200,7 +176,8 @@ private fun Modal() {
 
     Box(
         modifier = Modifier
-            .fillMaxSize(),
+            .fillMaxSize()
+            .graphicsLayer(),
         contentAlignment = Alignment.TopCenter
     ) {
         if (showPopup) {
@@ -211,21 +188,34 @@ private fun Modal() {
                     .padding(top = scale.dp(98f))
                     .zIndex(2f),
                 avatar = {
-                    AsyncImage(
-                        model = if (playerPhoto.isNullOrEmpty() || playerPhoto == "placeholder_avatar")
-                            R.drawable.ic_terms
-                        else
-                            playerPhoto,
-                        contentDescription = "avatar",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
+                    if (playerPhoto.isNullOrEmpty() || playerPhoto == "ic_terms") {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_terms),
+                            contentDescription = "avatar",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    else {
+                        AsyncImage(
+                            model = playerPhoto,
+                            placeholder = painterResource(id = R.drawable.ic_terms),
+                            error = painterResource(id = R.drawable.ic_terms),
+                            contentDescription = "avatar",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
                 },
                 content = {
                     Column(
-                        modifier = Modifier.fillMaxHeight(),
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(1f, fill = false),
                         verticalArrangement = Arrangement.Center
                     ) {
                         Text(
@@ -235,6 +225,8 @@ private fun Modal() {
                             fontWeight = FontWeight.Medium,
                             fontSize = scale.sp(22f),
                             letterSpacing = scale.sp(2f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             style = TextStyle(
                                 platformStyle = PlatformTextStyle(
                                     includeFontPadding = false
@@ -245,14 +237,18 @@ private fun Modal() {
                                 )
                             )
                         )
-                        Spacer(modifier = Modifier.height(scale.dp(16f)))
+
+                        Spacer(modifier = Modifier.height(scale.dp(8f)))
+
                         Text(
-                            text = account?.email ?: "",
+                            text = playerEmail,
                             color = LightGrey,
                             fontFamily = FontFamily.SansSerif,
                             fontWeight = FontWeight.Medium,
                             fontSize = scale.sp(20f),
                             letterSpacing = scale.sp(2f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             style = TextStyle(
                                 platformStyle = PlatformTextStyle(
                                     includeFontPadding = false
@@ -272,7 +268,8 @@ private fun Modal() {
 
     Box(
         modifier = Modifier
-            .widthIn(max = maxWidth),
+            .widthIn(max = maxWidth)
+            .graphicsLayer(),
         contentAlignment = Alignment.TopCenter
     ) {
         Box(
@@ -335,12 +332,13 @@ private fun Modal() {
                         SecondaryButton(
                             paddingH = 54f,
                             paddingV = 22f,
-                            text = "Privacy Policy",
+                            text = "Privacy policy",
                             onClick = {
                                 privacyLaunched = true
                                 openPrivacyPolicy(context, privacyUrl)
                             },
-                            modifier = Modifier
+                            modifier = Modifier,
+                            enabled = isSignedIn
                         )
 
                         Spacer(modifier = Modifier.height(scale.dp(82f)))
@@ -376,7 +374,7 @@ private fun Modal() {
                             112f,
                             28f,
                             text = "START",
-                            onClick = {},
+                            onClick = { onStartApp() },
                             enabled = privacyAccepted
                         )
 

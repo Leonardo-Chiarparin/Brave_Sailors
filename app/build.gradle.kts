@@ -49,8 +49,17 @@ android {
             res.srcDirs(
                 "src/main/res",
                 "src/main/res-intro",   // Directory for the "res-name" page
-                "src/main/res-terms"
+                "src/main/res-terms",
+                "src/main/res-profile"
             )
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += "**/dump_syms/**"
+            excludes += "**/dump_syms.bin"
+            excludes += "META-INF/DEPENDENCIES"
         }
     }
 }
@@ -58,9 +67,15 @@ android {
 dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("androidx.room:room-runtime:2.8.3")
     implementation("androidx.room:room-ktx:2.8.3")
     implementation("com.google.android.gms:play-services-games-v2:19.0.0")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -73,7 +88,8 @@ dependencies {
     implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.ui.text)
     implementation(libs.androidx.credentials.play.services.auth)
-    implementation(libs.play.services.auth)
+    implementation(libs.firebase.crashlytics.buildtools)
+    implementation(libs.androidx.compose.foundation)
     ksp("androidx.room:room-compiler:2.8.3")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

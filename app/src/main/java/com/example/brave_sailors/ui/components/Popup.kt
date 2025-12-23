@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,17 +68,17 @@ fun Popup(
 
     val progress = animationProgress.value
 
-    val seg1Fin = 0.5f / 5.25f // Fade-in
-    val seg2Fin = 0.75f / 5.25f // Stability
-    val seg3Fin = 1.25f / 5.25f // Avatar's Growth
-    val seg4Fin = 1.5f / 5.25f // Stability
-    val seg5Fin = 2.0f / 5.25f // Expansion
-    val seg6Fin = 3.25f / 5.25f // Stability
-    val seg7Fin = 3.75f / 5.25f // Decreasing
-    val seg8Fin = 4.0f / 5.25f // Stability
-    val seg9Fin = 4.5f / 5.25f // Avatar's Reduction
-    val seg10Fin = 4.75f / 5.25f // Stability
-    val seg11Fin = 5.25f / 5.25f // Fade-out
+    val seg1Fin = 0.5f / 4.5f // Fade-in
+    val seg2Fin = 0.75f / 4.5f // Stability
+    val seg3Fin = 1.25f / 4.5f // Avatar's Growth
+    val seg4Fin = 1.5f / 4.5f // Stability
+    val seg5Fin = 2.0f / 4.5f // Expansion
+    val seg6Fin = 3.25f / 4.5f // Stability
+    val seg7Fin = 3.50f / 4.5f // Decreasing
+    val seg8Fin = 3.75f / 4.5f // Stability
+    val seg9Fin = 4.0f / 4.5f // Avatar's Reduction
+    val seg10Fin = 4.25f / 4.5f // Stability
+    val seg11Fin = 4.5f / 4.5f // Fade-out
 
     var alpha = 0f
 
@@ -217,6 +218,7 @@ fun Popup(
                                     color = LightGreen,
                                     shape = RoundedCornerShape(50)
                                 )
+                                .widthIn(max = scale.dp(395f))
                                 .wrapContentWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
