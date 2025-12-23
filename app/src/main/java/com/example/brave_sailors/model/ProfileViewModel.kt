@@ -24,11 +24,24 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
 
     private val _userState = MutableStateFlow<User?>(null)
     val userState: StateFlow<User?> = _userState
+    
+    var showHomeWelcome: Boolean = false
 
     fun loadUser(userId: String) {
         viewModelScope.launch {
             userDao.observeUserById(userId).collectLatest { user ->
                 _userState.value = user
+            }
+        }
+    }
+
+    fun registerUser(user: User) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                userDao.insertUser(user)
+                Log.d("ProfileViewModel", "User registered: ${user.id}")
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "Error registering user: ${e.message}")
             }
         }
     }

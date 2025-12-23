@@ -19,7 +19,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 sealed class SigningResult {
-    data class Success(val user: User) : SigningResult()
+    data class Success(val user: User, val isNewUser: Boolean) : SigningResult()
     object Cancelled : SigningResult()
     data class Error(val msg: String) : SigningResult()
 }
@@ -36,7 +36,7 @@ class GoogleSigningUseCase(
             val user = userDao.getCurrentUser()
             if (user != null) {
                 prepareImage(context, user.profilePictureUrl)
-                return@withContext SigningResult.Success(user)
+                return@withContext SigningResult.Success(user, isNewUser = false)
             }
 
             // 2. Attempt Silent Login first, then Interactive
@@ -141,6 +141,7 @@ class GoogleSigningUseCase(
         userId = userId.ifEmpty { email }
 
         var entry = userDao.getUserById(userId)
+        val isNew = entry == null
 
         if (entry == null) {
             entry = User(
@@ -149,11 +150,11 @@ class GoogleSigningUseCase(
                 email = email,
                 profilePictureUrl = photoUrl
             )
-            userDao.insertUser(entry)
+            // Deferred registration
         }
 
         prepareImage(context, entry.profilePictureUrl)
-        return SigningResult.Success(entry)
+        return SigningResult.Success(entry, isNewUser = isNew)
     }
 
     private fun setOption(clientId: String, filterAuthorized: Boolean, autoSelect: Boolean): GetGoogleIdOption {

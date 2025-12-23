@@ -186,7 +186,7 @@ private fun Modal(viewModel: ProfileViewModel, onOpenChangeFlag: () -> Unit, onO
             }
         } else {
             // Optional: Uncomment to ask permission automatically on start
-            // locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+             locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     }
 

@@ -8,9 +8,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -23,6 +27,8 @@ import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.model.ProfileViewModelFactory
 import com.example.brave_sailors.ui.theme.Brave_SailorsTheme
 import com.example.brave_sailors.ui.utils.LockScreenOrientation
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,29 +66,58 @@ class MainActivity : ComponentActivity() {
                     factory = ProfileViewModelFactory(userDao)
                 )
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = Color.Transparent
-                ) { innerPadding ->
+                // State to determine start destination
+                var startDestination by remember { mutableStateOf<String?>(null) }
 
-                    NavHost(navController = navController, startDestination = "terms") {
-                        composable("terms") {
-                            TermsScreen(
-                                innerPadding = innerPadding,
-                                viewModel = profileViewModel,
-                                onStartApp = {
-                                    navController.navigate("home") {
-                                        popUpTo("terms") { inclusive = true }
+                LaunchedEffect(Unit) {
+                    val user = withContext(Dispatchers.IO) {
+                        userDao.getCurrentUser()
+                    }
+                    if (user != null) {
+                        profileViewModel.loadUser(user.id)
+                        profileViewModel.showHomeWelcome = true
+                        startDestination = "intro"
+                    } else {
+                        startDestination = "terms"
+                    }
+                }
+
+                if (startDestination != null) {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        containerColor = Color.Transparent
+                    ) { innerPadding ->
+
+                        NavHost(navController = navController, startDestination = startDestination!!) {
+                            composable("terms") {
+                                TermsScreen(
+                                    innerPadding = innerPadding,
+                                    viewModel = profileViewModel,
+                                    onStartApp = {
+                                        navController.navigate("intro") {
+                                            popUpTo("terms") { inclusive = true }
+                                        }
                                     }
-                                }
-                            )
-                        }
+                                )
+                            }
 
-                        composable("home") {
-                            HomeScreen(
-                                innerPadding = innerPadding,
-                                viewModel = profileViewModel
-                            )
+                            composable("intro") {
+                                IntroScreen(
+                                    innerPadding = innerPadding,
+                                    onFinished = {
+                                        navController.navigate("home") {
+                                            popUpTo("intro") { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
+
+                            composable("home") {
+                                HomeScreen(
+                                    innerPadding = innerPadding,
+                                    viewModel = profileViewModel
+                                )
+                            }
                         }
                     }
                 }
@@ -90,13 +125,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-/*
-    @Preview(showBackground = true)
-    @Composable
-    fun Preview() {
-        Brave_SailorsTheme {
-            HomeScreen()
-        }
-    }
-*/

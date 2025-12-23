@@ -23,7 +23,10 @@ import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
 @Composable
-fun Footer(modifier: Modifier = Modifier) {
+fun Footer(
+    modifier: Modifier = Modifier,
+    statusText: String = ". starting"
+) {
     val scale = RememberScaleConversion()
 
     Column(
@@ -65,8 +68,9 @@ fun Footer(modifier: Modifier = Modifier) {
         // 3) . start up audio ( if we decide to implement such functionality )
         // 4) . check consent and permissions
         // 5) . starting
+
         Text(
-            ". starting",
+            text = statusText,
             color = LightGrey,
             fontFamily = FontFamily.SansSerif,
             fontWeight = FontWeight.Medium,

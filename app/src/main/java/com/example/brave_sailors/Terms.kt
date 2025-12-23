@@ -97,10 +97,13 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
     var playerEmail by remember { mutableStateOf("") }
     var playerName by remember { mutableStateOf("Sailor") }
     var playerPhoto by remember { mutableStateOf<String?>(null) }
+    
+    // We hold the user object returned by login until "START" is pressed (for new users)
+    var pendingUser by remember { mutableStateOf<com.example.brave_sailors.data.local.database.entity.User?>(null) }
+    var isNewUser by remember { mutableStateOf(false) }
 
     val openPrivacyPolicy = remember { OpenPrivacyPolicyUseCase() }
     val privacyUrl = stringResource(R.string.privacy_policy)
-    val userDao = remember(context) { AppDatabase.getDatabase(context).userDao() }
     val webClientID = stringResource(R.string.web_client)
 
     val googleSigning = remember(context) {
@@ -119,10 +122,20 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                         playerName = user.name
                         playerEmail = user.email
                         playerPhoto = user.profilePictureUrl
+                        
+                        pendingUser = user
+                        isNewUser = result.isNewUser
 
-                        viewModel.loadUser(user.id)
+                        // If user is NOT new, we load them immediately.
+                        // If user IS new, we wait for "START" button.
+                        if (!isNewUser) {
+                            viewModel.loadUser(user.id)
+                            viewModel.showHomeWelcome = true // Show welcome popup on Home for returning users
+                        } else {
+                            // New user: show popup HERE on Terms screen
+                            showPopup = true
+                        }
 
-                        showPopup = true
                         isSignedIn = true
                         isSigningIn = false
                     }
@@ -374,7 +387,15 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                             112f,
                             28f,
                             text = "START",
-                            onClick = { onStartApp() },
+                            onClick = { 
+                                if (isNewUser) {
+                                    pendingUser?.let { 
+                                        viewModel.registerUser(it)
+                                        viewModel.loadUser(it.id)
+                                    }
+                                }
+                                onStartApp() 
+                            },
                             enabled = privacyAccepted
                         )
 
