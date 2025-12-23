@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Base64
 import android.util.Log
 import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
@@ -31,13 +32,14 @@ class GoogleSigningUseCase(
         val credentialManager = CredentialManager.create(context)
 
         try {
+            // 1. Check if user is already logged in locally
             val user = userDao.getCurrentUser()
-
             if (user != null) {
                 prepareImage(context, user.profilePictureUrl)
                 return@withContext SigningResult.Success(user)
             }
 
+            // 2. Attempt Silent Login first, then Interactive
             val result = try {
                 val silentOption = setOption(
                     webClientId,
@@ -54,6 +56,7 @@ class GoogleSigningUseCase(
                     context = context
                 )
             } catch (e: NoCredentialException) {
+                // If silent fails, open interactive popup
                 val interactiveOption = setOption(
                     webClientId,
                     filterAuthorized = false,
@@ -72,32 +75,47 @@ class GoogleSigningUseCase(
 
             val credential = result.credential
 
+            // 3. Credential Handling (Standard + Fallback)
+
+            // CASE A: GoogleIdTokenCredential
+            // Standard case: Works perfectly if libraries are aligned
             if (credential is GoogleIdTokenCredential) {
-                val googleIdToken = credential.idToken
-                val googleEmail = credential.id
-                val googleName = credential.displayName ?: "Sailor"
-                val googlePhoto = credential.profilePictureUri?.toString()
+                return@withContext handleSuccess(
+                    token = credential.idToken,
+                    email = credential.id,
+                    name = credential.displayName ?: "Sailor",
+                    photoUrl = credential.profilePictureUri?.toString(),
+                    context = context
+                )
+            }
+            // CASE B: CustomCredential
+            // Fallback case: Fixes "Credential type not recognized" when version mismatch occurs
+            else if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                try {
+                    val data = credential.data
+                    val googleIdToken = data.getString("com.google.android.libraries.identity.googleid.BUNDLE_KEY_ID_TOKEN")
+                    val googleEmail = data.getString("com.google.android.libraries.identity.googleid.BUNDLE_KEY_ID")
+                    val googleName = data.getString("com.google.android.libraries.identity.googleid.BUNDLE_KEY_DISPLAY_NAME")
+                    val googlePhoto = data.getString("com.google.android.libraries.identity.googleid.BUNDLE_KEY_PROFILE_PICTURE_URI")
 
-                var userId = getIDFromToken(googleIdToken)
-                userId = userId.ifEmpty { googleEmail }
-
-                var entry = userDao.getUserById(userId)
-
-                if (entry == null) {
-                    entry = User(
-                        id = userId,
-                        name = googleName,
-                        email = googleEmail,
-                        profilePictureUrl = googlePhoto
-                    )
-
-                    userDao.insertUser(entry)
+                    if (!googleIdToken.isNullOrEmpty() && !googleEmail.isNullOrEmpty()) {
+                        return@withContext handleSuccess(
+                            token = googleIdToken,
+                            email = googleEmail,
+                            name = googleName ?: "Sailor",
+                            photoUrl = googlePhoto,
+                            context = context
+                        )
+                    } else {
+                        return@withContext SigningResult.Error("Missing data in CustomCredential.")
+                    }
+                } catch (e: Exception) {
+                    return@withContext SigningResult.Error("Error parsing CustomCredential: ${e.message}")
                 }
-
-                prepareImage(context, entry.profilePictureUrl)
-                return@withContext SigningResult.Success(entry)
-
-            } else {
+            }
+            // CASE C: Unknown Type
+            else {
+                Log.e("AuthDebug", "Unknown Credential Type: ${credential.type} (${credential.javaClass.simpleName})")
                 return@withContext SigningResult.Error("Credential type not recognized.")
             }
 
@@ -108,6 +126,34 @@ class GoogleSigningUseCase(
             Log.e("SigningUseCase", "Login error: ${e.message}")
             return@withContext SigningResult.Error(e.message ?: "Unknown error.")
         }
+    }
+
+    // Helper function to save user and prevent code duplication
+    private suspend fun handleSuccess(
+        token: String,
+        email: String,
+        name: String,
+        photoUrl: String?,
+        context: Context
+    ): SigningResult {
+        var userId = getIDFromToken(token)
+        // Fallback if token decoding fails
+        userId = userId.ifEmpty { email }
+
+        var entry = userDao.getUserById(userId)
+
+        if (entry == null) {
+            entry = User(
+                id = userId,
+                name = name,
+                email = email,
+                profilePictureUrl = photoUrl
+            )
+            userDao.insertUser(entry)
+        }
+
+        prepareImage(context, entry.profilePictureUrl)
+        return SigningResult.Success(entry)
     }
 
     private fun setOption(clientId: String, filterAuthorized: Boolean, autoSelect: Boolean): GetGoogleIdOption {
