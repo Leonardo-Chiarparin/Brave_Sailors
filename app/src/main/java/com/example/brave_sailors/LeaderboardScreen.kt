@@ -1,12 +1,13 @@
 package com.example.brave_sailors
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.CutCornerShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
@@ -15,32 +16,48 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.example.brave_sailors.ui.components.GridBackground
+import com.example.brave_sailors.ui.components.Tab // Assicurati di avere questo componente dal Profilo
 import com.example.brave_sailors.ui.theme.*
+
+// Riutilizziamo il gradiente definito per il profilo per coerenza
+val OceanGradient = Brush.verticalGradient(
+    colors = listOf(Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364))
+)
+
+val CardGradient = Brush.horizontalGradient(
+    colors = listOf(Color(0xFF1A2980), Color(0xFF26D0CE).copy(alpha = 0.3f))
+)
 
 @Composable
 fun LeaderboardScreen(
     onBackClick: () -> Unit,
     paddingValues: PaddingValues = PaddingValues(0.dp)
 ) {
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val barHeight = screenHeight * 0.12f
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(paddingValues)
-            .background(DeepBlue)
+            .background(OceanGradient) // Nuovo sfondo
     ) {
         // --- TOP BAR ---
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height((LocalConfiguration.current.screenHeightDp.dp * 0.12f))
+                .height(barHeight)
+                .background(Color.Black.copy(alpha = 0.3f)) // Sostituisce BarPattern
         ) {
-            BarPattern(color = White.copy(alpha = 0.05f))
-
             IconButton(
                 onClick = onBackClick,
                 modifier = Modifier
@@ -59,50 +76,70 @@ fun LeaderboardScreen(
         Box(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .background(DarkBlue),
+                .fillMaxWidth(),
             contentAlignment = Alignment.TopCenter
         ) {
-            GridBackground(Modifier.matchParentSize(), color = LightGrey.copy(alpha = 0.1f), dimension = 40f)
+            // Sfondo griglia leggero
+            GridBackground(
+                modifier = Modifier.matchParentSize(),
+                color = Color.Cyan.copy(alpha = 0.05f),
+                dimension = 40f
+            )
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 32.dp),
+                    .padding(horizontal = 24.dp), // Padding leggermente ridotto per più spazio
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(64.dp))
+                Spacer(modifier = Modifier.height(80.dp)) // Spazio per la Tab
 
                 // Table Header
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("RANK", color = LightGrey, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Text("PLAYER", color = LightGrey, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Text("SCORE", color = LightGrey, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("RANK", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("PLAYER", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("SCORE", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
                 // Player List
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
                     itemsIndexed(staticLeaderboardData) { index, item ->
                         LeaderboardItem(rank = index + 1, name = item.first, score = item.second)
                     }
                 }
             }
-            HeaderTab(text = "LEADERBOARD")
+
+            // --- TAB (Floating Header) ---
+            // Sostituisce HeaderTab ed è posizionato sopra (zIndex)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = (-20).dp)
+                    .zIndex(2f)
+            ) {
+                Tab(
+                    paddingH = 100f,
+                    paddingV = 28f,
+                    text = "LEADERBOARD"
+                )
+            }
         }
 
         // --- BOTTOM BAR ---
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height((LocalConfiguration.current.screenHeightDp.dp * 0.12f))
-        ) {
-            BarPattern(color = White.copy(alpha = 0.05f))
-        }
+                .height(barHeight)
+                .background(Color.Black.copy(alpha = 0.3f)) // Sostituisce BarPattern
+        )
     }
 }
 
@@ -119,14 +156,33 @@ val staticLeaderboardData = listOf(
 
 @Composable
 fun LeaderboardItem(rank: Int, name: String, score: Int) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().height(70.dp), // Slightly increased height to accommodate the avatar
-        shape = CutCornerShape(topEnd = 12.dp, bottomStart = 12.dp),
-        color = Blue,
-        border = BorderStroke(1.dp, TransparentGrey)
+    val shape = RoundedCornerShape(16.dp)
+
+    // Definiamo colori speciali per i primi 3
+    val rankColor = when (rank) {
+        1 -> Color(0xFFFFD700) // Oro
+        2 -> Color(0xFFC0C0C0) // Argento
+        3 -> Color(0xFFCD7F32) // Bronzo
+        else -> Color.White
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp)
+            .shadow(6.dp, shape)
+            .clip(shape)
+            .background(CardGradient) // Sfondo gradiente per la card
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.1f),
+                shape = shape
+            )
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -135,36 +191,37 @@ fun LeaderboardItem(rank: Int, name: String, score: Int) {
                 // 1. Rank
                 Text(
                     text = "#$rank",
-                    color = if (rank <= 3) Orange else White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    modifier = Modifier.width(35.dp) // Reduced slightly to make space
+                    color = rankColor,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp,
+                    modifier = Modifier.width(40.dp)
                 )
 
-                // 2. Static Avatar (Circle with Icon)
+                // 2. Avatar
                 Box(
                     modifier = Modifier
-                        .size(40.dp) // Avatar size
+                        .size(42.dp)
                         .clip(CircleShape)
-                        .background(DarkBlue), // Dark background for contrast
+                        .background(Color.Black.copy(alpha = 0.3f))
+                        .border(1.dp, rankColor.copy(alpha = 0.5f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Person,
                         contentDescription = "Avatar",
-                        tint = LightGrey,
-                        modifier = Modifier.size(24.dp)
+                        tint = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.size(26.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(16.dp))
 
                 // 3. Name
                 Text(
                     text = name,
-                    color = White,
+                    color = Color.White,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
@@ -173,7 +230,8 @@ fun LeaderboardItem(rank: Int, name: String, score: Int) {
                 text = score.toString(),
                 color = Orange,
                 fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
+                fontSize = 16.sp,
+                letterSpacing = 1.sp
             )
         }
     }
