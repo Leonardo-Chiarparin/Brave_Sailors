@@ -21,19 +21,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CutCornerShape
@@ -48,13 +36,7 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,16 +60,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.canhub.cropper.CropImageContract
 import com.canhub.cropper.CropImageContractOptions
 import com.canhub.cropper.CropImageOptions
 import com.canhub.cropper.CropImageView
+import com.example.brave_sailors.data.CountryFlag
 import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.components.FifthButton
 import com.example.brave_sailors.ui.components.GridBackground
@@ -104,18 +89,6 @@ import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 import kotlinx.coroutines.delay
 
-data class Flag(val name: String, val code: String, val resourceId: Int)
-
-val availableFlags = listOf(
-    Flag("Italy", "IT", R.drawable.ic_flag_italy),
-    Flag("Spain", "ES", R.drawable.ic_flag_spain),
-    Flag("France", "FR", R.drawable.ic_flag_france),
-    Flag("United Kingdom", "GB", R.drawable.ic_flag_uk),
-    Flag("Belgium", "BE", R.drawable.ic_flag_belgium),
-    Flag("China", "CN", R.drawable.ic_flag_china),
-    Flag("Russia", "RU", R.drawable.ic_flag_russia)
-)
-
 @Composable
 fun ProfileScreen(viewModel: ProfileViewModel, onOpenChangeFlag: () -> Unit, onOpenChangeName: () -> Unit) {
     Modal(viewModel, onOpenChangeFlag, onOpenChangeName)
@@ -129,7 +102,10 @@ private fun Modal(viewModel: ProfileViewModel, onOpenChangeFlag: () -> Unit, onO
     val context = LocalContext.current
 
     val user by viewModel.userState.collectAsState()
+    val flagsList by viewModel.flagList.collectAsState() // Raccogli la lista dal ViewModel
+
     var showFilterDialog by remember { mutableStateOf(false) }
+    var showFlagSelectionDialog by remember { mutableStateOf(false) } // Stato per il dialog bandiere
     var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
 
     val cropImageLauncher = rememberLauncherForActivityResult(contract = CropImageContract()) { result ->
@@ -177,8 +153,6 @@ private fun Modal(viewModel: ProfileViewModel, onOpenChangeFlag: () -> Unit, onO
             cameraPermissionLauncher.launch(permission)
         }
     }
-
-
 
     LaunchedEffect(Unit) {
         delay(550.toLong())
@@ -270,7 +244,7 @@ private fun Modal(viewModel: ProfileViewModel, onOpenChangeFlag: () -> Unit, onO
                                         EditSection(
                                             viewModel = viewModel,
                                             onOpenChangeName = onOpenChangeName,
-                                            onOpenChangeFlag = onOpenChangeFlag,
+                                            onOpenChangeFlag = { showFlagSelectionDialog = true }, // Apre il dialog
                                             onTakePhoto = onTakePhotoClick
                                         )
                                     }
@@ -282,15 +256,26 @@ private fun Modal(viewModel: ProfileViewModel, onOpenChangeFlag: () -> Unit, onO
             }
         }
 
-        // --- DIALOG FILTRO ---
+
         if (showFilterDialog && capturedImageUri != null) {
             FilterSelectionDialog(
                 imageUri = capturedImageUri!!,
                 onDismiss = { showFilterDialog = false },
                 onConfirm = { bitmapWithFilter ->
-                    // Chiama il ViewModel che salva su file e aggiorna DB e Stato
                     viewModel.updateProfilePicture(context, bitmapWithFilter)
                     showFilterDialog = false
+                }
+            )
+        }
+
+
+        if (showFlagSelectionDialog) {
+            FlagSelectionDialog(
+                availableFlags = flagsList, // Passa la lista scaricata dal VM
+                onDismiss = { showFlagSelectionDialog = false },
+                onFlagSelected = { selectedFlag ->
+                    viewModel.updateCountry(selectedFlag.code) // Aggiorna usando il codice
+                    showFlagSelectionDialog = false
                 }
             )
         }
@@ -309,7 +294,7 @@ fun FilterSelectionDialog(
     val originalBitmap = remember(imageUri) {
         if (Build.VERSION.SDK_INT < 28) {
             MediaStore.Images.Media.getBitmap(context.contentResolver, imageUri)
-                .copy(Bitmap.Config.ARGB_8888, true) // Assicura che sia modificabile
+                .copy(Bitmap.Config.ARGB_8888, true)
         } else {
             val source = ImageDecoder.createSource(context.contentResolver, imageUri)
             ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
@@ -400,7 +385,7 @@ fun FilterSelectionDialog(
                     )
 
                     SecondaryButton(
-                        text = "OK", // Testo corretto
+                        text = "OK",
                         onClick = {
                             val finalBitmap = if (applyFilter) {
                                 applyColorMatrixToBitmap(originalBitmap, blackAndWhiteMatrix)
@@ -421,13 +406,10 @@ fun FilterSelectionDialog(
 private fun applyColorMatrixToBitmap(src: Bitmap, matrix: ColorMatrix): Bitmap {
     val config = src.config ?: Bitmap.Config.ARGB_8888
     val dest = Bitmap.createBitmap(src.width, src.height, config)
-
     val canvas = android.graphics.Canvas(dest)
     val paint = android.graphics.Paint()
-
     val androidMatrix = android.graphics.ColorMatrix(matrix.values)
     paint.colorFilter = android.graphics.ColorMatrixColorFilter(androidMatrix)
-
     canvas.drawBitmap(src, 0f, 0f, paint)
     return dest
 }
@@ -435,8 +417,13 @@ private fun applyColorMatrixToBitmap(src: Bitmap, matrix: ColorMatrix): Bitmap {
 @Composable
 private fun EditSection(viewModel: ProfileViewModel, onOpenChangeName: () -> Unit, onOpenChangeFlag: () -> Unit, onTakePhoto: () -> Unit) {
     val user by viewModel.userState.collectAsState()
-    val currentFlag = remember(user?.countryCode) { availableFlags.find { it.code == user?.countryCode } ?: availableFlags.first() }
+    val flagsList by viewModel.flagList.collectAsState()
     val scale = RememberScaleConversion()
+
+
+    val currentFlagUrl = remember(user?.countryCode, flagsList) {
+        flagsList.find { it.code == user?.countryCode }?.flagUrl
+    }
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.Top) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(scale.dp(18f)), verticalAlignment = Alignment.CenterVertically) {
@@ -450,13 +437,11 @@ private fun EditSection(viewModel: ProfileViewModel, onOpenChangeName: () -> Uni
             Column(modifier = Modifier.width(scale.dp(120f)), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(scale.dp(18f))) {
                 Text(text = "Portrait", color = White, fontSize = scale.sp(26f), fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, letterSpacing = scale.sp(2f), style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false), lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both), shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)))
 
-                // --- LOGICA DI CARICAMENTO IMMAGINE CON REFRESH ---
                 val painter = if (!user?.profilePictureUrl.isNullOrEmpty()) {
                     rememberAsyncImagePainter(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(user?.profilePictureUrl)
                             .crossfade(true)
-                            // La chiave per forzare il refresh quando cambia il timestamp
                             .setParameter("key", user?.lastUpdated ?: System.currentTimeMillis())
                             .build(),
                         error = painterResource(R.drawable.ic_avatar_placeholder)
@@ -470,7 +455,18 @@ private fun EditSection(viewModel: ProfileViewModel, onOpenChangeName: () -> Uni
             Spacer(modifier = Modifier.weight(1f))
             Column(modifier = Modifier.width(scale.dp(120f)), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(scale.dp(18f))) {
                 Text(text = "Flag", color = White, fontSize = scale.sp(26f), fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, letterSpacing = scale.sp(2f), style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false), lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both), shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)))
-                SixthButton(onClick = onOpenChangeFlag, imagePainter = painterResource(id = currentFlag.resourceId))
+
+
+                val flagPainter = rememberAsyncImagePainter(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(currentFlagUrl)
+                        .crossfade(true)
+                        .build(),
+                    error = painterResource(R.drawable.ic_launcher_background), // Usa un placeholder
+                    placeholder = painterResource(R.drawable.ic_launcher_background)
+                )
+
+                SixthButton(onClick = onOpenChangeFlag, imagePainter = flagPainter)
             }
         }
         Spacer(modifier = Modifier.height(scale.dp(132f)))
@@ -478,10 +474,13 @@ private fun EditSection(viewModel: ProfileViewModel, onOpenChangeName: () -> Uni
     }
 }
 
-// --- RESTO CODICE INVARIATO (DialogName, FlagDialog, Overview...) ---
 
 @Composable
-fun FlagSelectionDialog(onDismiss: () -> Unit, onFlagSelected: (Flag) -> Unit) {
+fun FlagSelectionDialog(
+    availableFlags: List<CountryFlag>,
+    onDismiss: () -> Unit,
+    onFlagSelected: (CountryFlag) -> Unit
+) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
@@ -491,8 +490,23 @@ fun FlagSelectionDialog(onDismiss: () -> Unit, onFlagSelected: (Flag) -> Unit) {
                 Text("SELECT FLAG", Modifier.padding(16.dp), color = White, fontWeight = FontWeight.Bold)
                 LazyColumn(Modifier.heightIn(max = 400.dp)) {
                     items(availableFlags) { flag ->
-                        Row(Modifier.fillMaxWidth().clickable { onFlagSelected(flag) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Image(painterResource(flag.resourceId), null, Modifier.size(40.dp, 25.dp))
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onFlagSelected(flag) }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(flag.flagUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = flag.name,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.size(40.dp, 25.dp).background(Color.Gray.copy(alpha = 0.3f))
+                            )
                             Spacer(Modifier.width(16.dp))
                             Text(flag.name, color = White)
                         }

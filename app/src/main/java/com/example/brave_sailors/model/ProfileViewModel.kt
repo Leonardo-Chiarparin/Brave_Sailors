@@ -9,11 +9,18 @@ import android.graphics.Paint
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.brave_sailors.data.CountryFlag
+import com.example.brave_sailors.data.RetrofitInstance
 import com.example.brave_sailors.data.local.database.UserDao
 import com.example.brave_sailors.data.local.database.entity.User
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -22,19 +29,63 @@ import java.io.FileOutputStream
 
 class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
 
+    // --- User State ---
     private val _userState = MutableStateFlow<User?>(null)
     val userState: StateFlow<User?> = _userState
 
+    // --- Flag List State (From PythonAnywhere API) ---
+    private val _flagList = MutableStateFlow<List<CountryFlag>>(emptyList())
+    val flagList: StateFlow<List<CountryFlag>> = _flagList.asStateFlow()
+
+    // --- Session / Security State ---
+    private val _forceLogoutEvent = MutableStateFlow(false)
+    val forceLogoutEvent = _forceLogoutEvent.asStateFlow()
+
+    // --- Firebase Realtime Database Helpers ---
+    private val database = FirebaseDatabase.getInstance()
+    private var sessionListener: ValueEventListener? = null
+    private var monitoredUserId: String? = null // Keeps track of which ID we are listening to
+
+    // Helper flag for the "Welcome Back" popup
     var showHomeWelcome: Boolean = false
 
-    fun loadUser(userId: String) {
-        viewModelScope.launch {
-            userDao.observeUserById(userId).collectLatest { user ->
-                _userState.value = user
+    init {
+        // Fetch flags immediately upon creation
+        fetchFlags()
+    }
+
+    // --- API Logic (PythonAnywhere) ---
+    private fun fetchFlags() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                Log.d("ProfileViewModel", "Starting flags download...")
+                val flags = RetrofitInstance.api.getFlags()
+                _flagList.value = flags
+                Log.d("ProfileViewModel", "Flags downloaded successfully: ${flags.size} found.")
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "Error fetching flags: ${e.message}")
+                e.printStackTrace()
             }
         }
     }
 
+    // --- User Logic & Session Management ---
+
+    // Loads the user from Room and starts the Realtime Database Session Observer
+    fun loadUser(userId: String) {
+        viewModelScope.launch {
+            userDao.observeUserById(userId).collectLatest { user ->
+                _userState.value = user
+
+                // If user exists and has a session token, start watching for concurrency
+                if (user != null && !user.sessionToken.isNullOrEmpty()) {
+                    startSessionObserver(user.id, user.sessionToken)
+                }
+            }
+        }
+    }
+
+    // 1. REGISTRATION
     fun registerUser(user: User) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -45,6 +96,65 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
             }
         }
     }
+
+    // 2. SESSION OBSERVER (Realtime Database Implementation)
+    private fun startSessionObserver(userId: String, localToken: String) {
+        // If we are already listening to this user, do nothing
+        if (sessionListener != null && monitoredUserId == userId) return
+
+        // Clean up previous listeners if user changed
+        removeSessionListener()
+
+        monitoredUserId = userId
+        val userRef = database.getReference("users").child(userId)
+
+        // Create the listener
+        sessionListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                // Read the token currently on the server
+                val serverToken = snapshot.child("sessionToken").getValue(String::class.java)
+
+                // CRITICAL CHECK:
+                // If the token on the server is different from the one on this phone,
+                // it means a new login occurred elsewhere. Trigger forced logout.
+                if (serverToken != null && serverToken != localToken) {
+                    Log.w("Session", "Session Conflict detected! Server: $serverToken vs Local: $localToken")
+                    _forceLogoutEvent.value = true
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("ProfileViewModel", "Database listen failed: ${error.message}")
+            }
+        }
+
+        // Attach the listener
+        userRef.addValueEventListener(sessionListener!!)
+    }
+
+    // 3. LOGOUT (Cleanup)
+    fun performLocalLogout() {
+        removeSessionListener()
+
+        viewModelScope.launch(Dispatchers.IO) {
+            userDao.deleteAllUsers() // Clear local data
+            _forceLogoutEvent.value = false // Reset trigger
+            _userState.value = null
+        }
+    }
+
+    // Helper to cleanly detach the listener
+    private fun removeSessionListener() {
+        if (sessionListener != null && monitoredUserId != null) {
+            database.getReference("users")
+                .child(monitoredUserId!!)
+                .removeEventListener(sessionListener!!)
+            sessionListener = null
+            monitoredUserId = null
+        }
+    }
+
+    // --- Profile Updates ---
 
     fun updateCountry(countryCode: String) {
         val currentUser = _userState.value
@@ -60,10 +170,9 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
             try {
                 userDao.updateUser(updatedUser)
                 Log.d("ProfileViewModel", "Country has been changed to: $countryCode")
-                // Aggiorniamo lo stato locale subito
                 _userState.value = updatedUser
             } catch (e: Exception) {
-                Log.e("ProfileViewModel", "Error during the update: ${e.message}")
+                Log.e("ProfileViewModel", "Error during update: ${e.message}")
                 e.printStackTrace()
             }
         }
@@ -73,8 +182,8 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             val currentUser = userState.value
             if (currentUser != null && newName.isNotBlank()) {
-                 userDao.updateUserName(currentUser.id, newName)
-
+                userDao.updateUserName(currentUser.id, newName)
+                // Flow will update automatically via observeUserById, but we update state here for immediate UI response
                 val updatedUser = currentUser.copy(name = newName)
                 _userState.value = updatedUser
             }
@@ -86,8 +195,6 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
 
         viewModelScope.launch {
             try {
-                val processedBitmap = bitmap
-
                 val updateTime = System.currentTimeMillis()
 
                 val filePath = withContext(Dispatchers.IO) {
@@ -97,7 +204,7 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
                     if (file.exists()) file.delete()
 
                     FileOutputStream(file).use { out ->
-                        processedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
                     }
 
                     file.absolutePath
@@ -105,12 +212,7 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
 
                 withContext(Dispatchers.IO) {
                     userDao.updateProfilePicture(currentUser.id, filePath, updateTime)
-
-                    val updatedUser = currentUser.copy(
-                        profilePictureUrl = filePath,
-                        lastUpdated = updateTime
-                    )
-                    _userState.value = updatedUser
+                    // We don't need to manually update _userState here because 'loadUser' is observing the DB
                 }
 
             } catch (e: Exception) {
@@ -119,6 +221,24 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
         }
     }
 
+    // Restores the original Google Name and Photo (Backup Identity)
+    fun restoreGoogleProfile() {
+        val currentUser = _userState.value ?: return
+
+        val restoredUser = currentUser.copy(
+            name = currentUser.googleName,
+            profilePictureUrl = currentUser.googlePhotoUrl,
+            lastUpdated = System.currentTimeMillis()
+        )
+
+        viewModelScope.launch(Dispatchers.IO) {
+            userDao.updateUser(restoredUser)
+            // State updates automatically via Flow
+            Log.d("ProfileViewModel", "Profile restored to Google defaults")
+        }
+    }
+
+    // Helper function (if needed for image processing)
     private fun applyGrayscaleToBitmap(src: Bitmap): Bitmap {
         val width = src.width
         val height = src.height
@@ -126,14 +246,16 @@ class ProfileViewModel(private val userDao: UserDao) : ViewModel() {
         val canvas = Canvas(dest)
         val paint = Paint()
         val colorMatrix = ColorMatrix()
-
         colorMatrix.setSaturation(0f)
-
         val filter = ColorMatrixColorFilter(colorMatrix)
-
         paint.colorFilter = filter
         canvas.drawBitmap(src, 0f, 0f, paint)
-
         return dest
+    }
+
+    // Lifecycle cleanup
+    override fun onCleared() {
+        super.onCleared()
+        removeSessionListener()
     }
 }

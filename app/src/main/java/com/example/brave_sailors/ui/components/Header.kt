@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.example.brave_sailors.R
-import com.example.brave_sailors.availableFlags
+// REMOVED: import com.example.brave_sailors.availableFlags
 import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.theme.Grey
 import com.example.brave_sailors.ui.theme.White
@@ -110,6 +110,9 @@ fun Tab(paddingH: Float, paddingV: Float, text: String) {
 @Composable
 fun Profile(viewModel: ProfileViewModel) {
     val user by viewModel.userState.collectAsState()
+
+    // 1. RECUPERA LA LISTA DELLE BANDIERE DAL VM
+    val flagsList by viewModel.flagList.collectAsState()
 
     val scale = RememberScaleConversion()
 
@@ -307,12 +310,23 @@ fun Profile(viewModel: ProfileViewModel) {
                                 .padding(all = scale.dp(14f)),
                             contentAlignment = Alignment.TopCenter
                         ) {
-                            val currentFlag = remember(user?.countryCode) {
-                                availableFlags.find { it.code == user?.countryCode } ?: availableFlags.first()
+                            // 2. LOGICA AGGIORNATA: Trova l'URL basato sul codice paese dell'utente
+                            val currentFlagUrl = remember(user?.countryCode, flagsList) {
+                                flagsList.find { it.code == user?.countryCode }?.flagUrl
                             }
 
+                            // 3. USA COIL PER CARICARE L'URL
+                            val flagPainter = rememberAsyncImagePainter(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(currentFlagUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                error = painterResource(R.drawable.ic_launcher_background),
+                                placeholder = painterResource(R.drawable.ic_launcher_background)
+                            )
+
                             Image(
-                                painter = painterResource(id = currentFlag.resourceId),
+                                painter = flagPainter, // Usa il painter di Coil
                                 contentDescription = "Flag",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier

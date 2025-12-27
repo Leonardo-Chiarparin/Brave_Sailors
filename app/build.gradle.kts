@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    id("com.google.gms.google-services")
+
 }
 
 android {
@@ -63,8 +65,8 @@ android {
         }
     }
 }
-
 dependencies {
+    // ... tutte le tue altre dipendenze rimangono uguali ...
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.credentials:credentials:1.3.0")
@@ -79,6 +81,11 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("com.vanniktech:android-image-cropper:4.5.0")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
+    implementation("com.google.firebase:firebase-database")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -89,7 +96,6 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.ui.text)
-    implementation(libs.firebase.crashlytics.buildtools)
     implementation(libs.androidx.compose.foundation)
     ksp("androidx.room:room-compiler:2.8.3")
     testImplementation(libs.junit)

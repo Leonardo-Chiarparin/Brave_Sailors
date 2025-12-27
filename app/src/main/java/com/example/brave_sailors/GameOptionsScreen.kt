@@ -2,6 +2,7 @@ package com.example.brave_sailors
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -33,9 +35,7 @@ import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.components.Tab
 import com.example.brave_sailors.ui.theme.*
 
-val OceanGradient = Brush.verticalGradient(
-    colors = listOf(Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364))
-)
+
 val ButtonGradient = Brush.horizontalGradient(
     colors = listOf(Color(0xFFFF8008), Color(0xFFFFC837)) // Arancione -> Oro
 )
@@ -309,6 +309,33 @@ fun StartBattleButton(
                 tint = Color(0xFF3E2723),
                 modifier = Modifier.size(20.dp)
             )
+        }
+    }
+
+}
+
+@Composable
+fun BarPattern(color: Color) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val canvasWidth = size.width
+        val canvasHeight = size.height
+
+        // Configurazione delle strisce
+        val strokeWidth = 2.dp.toPx()
+        val spacing = 12.dp.toPx() // Distanza tra le linee
+
+        // Calcolo per coprire l'intera area con linee diagonali
+        // Si parte da 0 fino a width + height per coprire l'angolo in basso a destra
+        var currentX = 0f
+
+        while (currentX < canvasWidth + canvasHeight) {
+            drawLine(
+                color = color,
+                start = Offset(x = currentX, y = 0f),
+                end = Offset(x = currentX - canvasHeight, y = canvasHeight),
+                strokeWidth = strokeWidth
+            )
+            currentX += spacing
         }
     }
 }
