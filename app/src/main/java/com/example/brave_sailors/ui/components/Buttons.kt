@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
@@ -70,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.brave_sailors.ui.theme.DarkBlue
 import com.example.brave_sailors.ui.theme.LightGrey
 import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.TransparentGrey
@@ -838,5 +841,38 @@ private fun drawButtonBorder(
             }
             drawPath(path = rightPath, color = borderColor, style = Stroke(width = strokeWidthPx))
         }
+    }
+}
+
+@Composable
+fun CloseButton(
+    onClick: () -> Unit,
+    shape: CutCornerShape,
+    modifier: Modifier = Modifier
+) {
+    val scale = RememberScaleConversion()
+    val interactionSource = remember { MutableInteractionSource() }
+    val buttonSize = scale.dp(74f)
+
+    Box(
+        modifier = modifier
+            .padding(top = scale.dp(50f))
+            .size(buttonSize)
+            .background(DarkBlue, shape = shape)
+            .border(BorderStroke(scale.dp(1f), Orange), shape = shape)
+            .clip(shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Close",
+            tint = White,
+            modifier = Modifier.size(scale.dp(26f))
+        )
     }
 }

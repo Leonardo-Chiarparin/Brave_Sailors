@@ -16,6 +16,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +31,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -35,6 +41,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.imageLoader
+import coil.request.ImageRequest
+import com.example.brave_sailors.data.remote.api.Flag
+import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.components.Footer
 import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.components.Radar
@@ -43,10 +53,17 @@ import com.example.brave_sailors.ui.theme.DarkGrey
 import com.example.brave_sailors.ui.theme.DeepBlue
 import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlin.math.max
 
 @Composable
-fun IntroScreen(innerPadding: PaddingValues = PaddingValues(0.dp)) {
+fun IntroScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: ProfileViewModel, onFinished: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -61,13 +78,14 @@ fun IntroScreen(innerPadding: PaddingValues = PaddingValues(0.dp)) {
                 .background(DeepBlue),
             contentAlignment = Alignment.Center
         ) {
-            Modal()
+            Modal(viewModel, onFinished)
         }
     }
 }
 
 @Composable
-private fun Modal() {
+private fun Modal(viewModel: ProfileViewModel, onFinished: () -> Unit) {
+    val context = LocalContext.current
     val ovalShape = GenericShape { size, _ ->
         addOval(Rect(0f, 0f, size.width, size.height))
     }
@@ -76,6 +94,81 @@ private fun Modal() {
     val scale = RememberScaleConversion()
 
     val maxWidth = scale.dp(648f) // 648px, etc.
+
+    // Handling the Footer's textState ( . connect to server )
+    // The order of such sentences is:
+    // 0) . initialize social gaming network ( ? )
+    // 1) . connect to server
+    // 2) . retrieve data from server
+    // 3) . start up audio ( if we decide to implement such functionality )
+    // 4) . check consent and permissions
+    // 5) . starting
+
+    var statusText by remember { mutableStateOf(". connect to server") }
+    val radarDuration = 4500L * 2L // two times the duration taken by the radar to complete a turn
+
+    LaunchedEffect(Unit) {
+        val timerJob = async {
+            delay(radarDuration / 8)
+            statusText = ". retrieve data from server"
+            delay(radarDuration / 4)
+            statusText = ". check consent and permissions"
+            delay(radarDuration / 8)
+            statusText = ". starting"
+            delay(radarDuration / 2)
+        }
+
+        val imagesJob = async {
+            val imageLoader = context.imageLoader
+
+            val loadedUser = viewModel.userState
+                .filterNotNull()
+                .first()
+
+            val loadedFlags = viewModel.flagList
+                .filter { it.isNotEmpty() }
+                .first()
+
+            if (!loadedUser.profilePictureUrl.isNullOrEmpty()) {
+                val request = ImageRequest.Builder(context)
+                    .data(loadedUser.profilePictureUrl)
+                    .build()
+                imageLoader.execute(request)
+            }
+
+            val userFlag = loadedFlags.find { it.code == loadedUser.countryCode }
+            if (userFlag != null) {
+                val request = ImageRequest.Builder(context)
+                    .data(userFlag.flagUrl)
+                    .build()
+                imageLoader.execute(request)
+            }
+
+            Pair(loadedUser, loadedFlags)
+        }
+
+        val result = awaitAll(timerJob, imagesJob)
+
+        val (finalUser, finalFlags) = result[1] as Pair<*, *>
+        val safeUser = finalUser as? com.example.brave_sailors.data.local.database.entity.User
+        val safeFlags = finalFlags as? List<Flag>
+
+        launch {
+            if (safeUser != null && safeFlags != null) {
+                val imageLoader = context.imageLoader
+                safeFlags.forEach { flag ->
+                    if (flag.code != safeUser.countryCode) {
+                        val request = ImageRequest.Builder(context)
+                            .data(flag.flagUrl)
+                            .build()
+                        imageLoader.enqueue(request)
+                    }
+                }
+            }
+        }
+
+        onFinished()
+    }
 
     Box(
         modifier = Modifier
@@ -169,7 +262,7 @@ private fun Modal() {
                 Spacer(modifier = Modifier.weight(1f))
             }
 
-            Footer(modifier = Modifier.align(Alignment.BottomCenter))
+            Footer(modifier = Modifier.align(Alignment.BottomCenter), statusText)
         }
     }
 }

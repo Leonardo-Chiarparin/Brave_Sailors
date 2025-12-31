@@ -57,13 +57,17 @@ fun Popup(
             animationProgress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(
-                    durationMillis = 5250,
+                    durationMillis = 4500,
                     easing = LinearEasing
                 )
             )
 
             onDone()
         }
+    }
+
+    fun calculateFraction(progress: Float, start: Float, end: Float): Float {
+        return ((progress - start) / (end - start)).coerceIn(0f, 1f)
     }
 
     val progress = animationProgress.value
@@ -74,7 +78,7 @@ fun Popup(
     val seg4Fin = 1.5f / 4.5f // Stability
     val seg5Fin = 2.0f / 4.5f // Expansion
     val seg6Fin = 3.25f / 4.5f // Stability
-    val seg7Fin = 3.50f / 4.5f // Decreasing
+    val seg7Fin = 3.5f / 4.5f // Decreasing
     val seg8Fin = 3.75f / 4.5f // Stability
     val seg9Fin = 4.0f / 4.5f // Avatar's Reduction
     val seg10Fin = 4.25f / 4.5f // Stability
@@ -91,7 +95,7 @@ fun Popup(
 
     when {
         progress <= seg1Fin -> {
-            val fraction = (progress / seg1Fin).coerceIn(0f, 1f)
+            val fraction = calculateFraction(progress, 0f, seg1Fin)
 
             alpha = fraction
             outerSize = lerp(0.dp, minOuterWidth, fraction)
@@ -103,7 +107,7 @@ fun Popup(
         }
 
         progress <= seg3Fin -> {
-            val fraction = ((progress - seg2Fin) / (seg3Fin - seg2Fin)).coerceIn(0f, 1f)
+            val fraction = calculateFraction(progress, seg2Fin, seg3Fin)
 
             alpha = 1f
             innerSize = lerp(0.dp, minInnerWidth, fraction)
@@ -117,7 +121,7 @@ fun Popup(
         }
 
         progress <= seg5Fin -> {
-            val fraction = ((progress - seg4Fin) / (seg5Fin - seg4Fin)).coerceIn(0f, 1f)
+            val fraction = calculateFraction(progress, seg4Fin, seg5Fin)
 
             alpha = 1f
             isCircle = false
@@ -135,7 +139,7 @@ fun Popup(
         }
 
         progress <= seg7Fin -> {
-            val fraction = ((progress - seg6Fin) / (seg7Fin - seg6Fin)).coerceIn(0f, 1f)
+            val fraction = calculateFraction(progress, seg6Fin, seg7Fin)
 
             alpha = 1f
             isCircle = false
@@ -150,7 +154,7 @@ fun Popup(
         }
 
         progress <= seg9Fin -> {
-            val fraction = ((progress - seg8Fin) / (seg9Fin - seg8Fin)).coerceIn(0f, 1f)
+            val fraction = calculateFraction(progress, seg8Fin, seg9Fin)
 
             alpha = 1f
             innerSize = lerp(minInnerWidth, 0.dp, fraction)
@@ -163,7 +167,7 @@ fun Popup(
         }
 
         progress <= seg11Fin -> {
-            val fraction = ((progress - seg10Fin) / (seg11Fin - seg10Fin)).coerceIn(0f, 1f)
+            val fraction = calculateFraction(progress, seg10Fin, seg11Fin)
 
             alpha = (1f - fraction).coerceIn(0f, 1f)
             outerSize = lerp(minOuterWidth, 0.dp, fraction)

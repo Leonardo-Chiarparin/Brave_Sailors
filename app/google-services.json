@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "458450729028",
+    "firebase_url": "https://brave-sailors-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "brave-sailors",
+    "storage_bucket": "brave-sailors.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:458450729028:android:124f295bdc3f77b8efe411",
+        "android_client_info": {
+          "package_name": "com.example.brave_sailors"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAb--2HxLLQC4Jy8UEuNt-vFUeZ3Se4yWs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

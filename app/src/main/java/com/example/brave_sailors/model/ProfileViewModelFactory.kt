@@ -1,10 +1,8 @@
-// ProfileViewModelFactory.kt
 package com.example.brave_sailors.model
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.brave_sailors.data.local.database.UserDao
-import com.example.brave_sailors.model.ProfileViewModel
 
 class ProfileViewModelFactory(private val userDao: UserDao) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

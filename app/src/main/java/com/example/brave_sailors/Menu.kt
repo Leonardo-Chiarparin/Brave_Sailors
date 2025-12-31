@@ -13,6 +13,11 @@ import androidx.compose.material.icons.filled.QuestionMark
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideogameAsset
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -24,14 +29,32 @@ import com.example.brave_sailors.ui.theme.DarkBlue
 import com.example.brave_sailors.ui.theme.LightBlue
 import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
+import kotlinx.coroutines.delay
 
-@Composable
-fun MenuScreen() {
-    Modal()
+enum class OverlayMenuState {
+    IDLE,
+    EXITING_MENU,
+    SHOWING_OPTIONS,
+    SHOWING_SETTINGS,
+    SHOWING_INSTRUCTIONS
 }
 
 @Composable
-private fun Modal() {
+fun MenuScreen(onOpenGameOptions: () -> Unit, onOpenAccountSettings: () -> Unit, onOpenInstructions: () -> Unit) {
+    var isVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        isVisible = false
+        delay(300)
+        isVisible = true
+    }
+
+    if (isVisible)
+        Modal(onOpenGameOptions, onOpenAccountSettings, onOpenInstructions)
+}
+
+@Composable
+private fun Modal(onOpenGameOptions: () -> Unit, onOpenAccountSettings: () -> Unit, onOpenInstructions: () -> Unit) {
     // -- SCALE ( used for applying conversions ) --
     // [ MEMO ]: Sizes are taken from 720 x 1600px mockup ( with 72dpi ) using the Redmi Note 10S
     val scale = RememberScaleConversion()
@@ -91,19 +114,19 @@ private fun Modal() {
                     QuaternaryButton(
                         text = "Game\noptions",
                         icon = Icons.Default.VideogameAsset,
-                        onClick = {  }
+                        onClick = onOpenGameOptions
                     )
 
                     QuaternaryButton(
                         text = "Account\nsettings",
                         icon = Icons.Default.Settings,
-                        onClick = {  }
+                        onClick = onOpenAccountSettings
                     )
 
                     QuaternaryButton(
                         text = "Instructions",
                         icon = Icons.Default.QuestionMark,
-                        onClick = {  }
+                        onClick = onOpenInstructions
                     )
                 }
             }

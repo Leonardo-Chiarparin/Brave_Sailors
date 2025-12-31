@@ -6,9 +6,14 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "users")
 data class User(
     @PrimaryKey val id: String,
-    val name: String,
     val email: String,
+    val sessionToken: String? = null,
+    val name: String,
     val profilePictureUrl: String?,
+
+    val googleName: String,
+    val googlePhotoUrl: String?,
+
     val countryCode: String? = null,
     val lastUpdated: Long = System.currentTimeMillis()
 )

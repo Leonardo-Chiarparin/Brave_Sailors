@@ -56,6 +56,13 @@ import androidx.compose.ui.unit.dp
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
+object NavigationConstants {
+    const val BAR_DURATION = 250      
+    const val CONTENT_DURATION = 300
+
+    const val TOTAL_DURATION = BAR_DURATION + CONTENT_DURATION
+}
+
 // [ TO - DO ]: Provide a name for the penultimate item
 enum class NavigationItem(
     val title: String,
@@ -103,8 +110,8 @@ fun RowScope.NavigationItemView(
     isSelected: Boolean,
     onItemClick: () -> Unit
 ) {
-    val barAnimationDuration = 250
-    val contentAnimationDuration = 300
+    val barAnimationDuration = NavigationConstants.BAR_DURATION
+    val contentAnimationDuration = NavigationConstants.CONTENT_DURATION
 
     val interactionSource = remember { MutableInteractionSource() }
     val scale = RememberScaleConversion()

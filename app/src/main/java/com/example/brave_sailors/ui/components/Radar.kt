@@ -50,19 +50,26 @@ fun Radar(modifier: Modifier) {
     )
 
     val gapBetweenCircles = with(density){ scale.dp(14f).toPx() } // blips' radius * 2f
+    val fixedOffset = with(density) { scale.dp(7f).toPx() }
 
     BoxWithConstraints(modifier = modifier) {
         val outerRadius = constraints.maxWidth.coerceAtMost(constraints.maxHeight).toFloat() / 2f
         val innerRadius = outerRadius - gapBetweenCircles
 
-        val innerBoundaryRatio = if (outerRadius > 0) (innerRadius - (gapBetweenCircles / 2f)) / outerRadius else 1f - ((innerRadius - (gapBetweenCircles / 2f)) / outerRadius)
-
         val blips = remember(density, constraints) {
+            val minRadius = gapBetweenCircles + fixedOffset
+            val maxRadius = outerRadius - ((2 * gapBetweenCircles) + fixedOffset)
+
+            val safeRadius = if (maxRadius > minRadius) maxRadius else minRadius
+
+            val innerBoundaryRatio = minRadius / outerRadius
+            val outerBoundaryRatio = safeRadius / outerRadius
+
             generateBlips(
                 count = 5,
                 minDistance = gapBetweenCircles * 1.25f,
-                minRadius = with(density) { scale.dp((1f - innerBoundaryRatio) / 2f).toPx() },
-                maxRadius = with(density) { scale.dp(innerBoundaryRatio / 2f).toPx() },
+                minRadius = innerBoundaryRatio,
+                maxRadius = outerBoundaryRatio,
                 outerRadius = outerRadius
             )
         }
@@ -77,7 +84,8 @@ fun DrawRadar(angle: Float, blips: List<RadarBlip>, innerRadius: Float, outerRad
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val center = Offset(size.width / 2f, size.height / 2f)
-        val coneDegrees = 60f
+        val coneDegrees = 48f
+        val sweepFactor = coneDegrees / 360f
 
         // Outer circle
         drawCircle(
@@ -115,20 +123,19 @@ fun DrawRadar(angle: Float, blips: List<RadarBlip>, innerRadius: Float, outerRad
         }
 
         // Radar ( with a 60-degree cone )
-        rotate(degrees = angle, pivot = center) {
+        rotate(degrees = (angle - 90f) - coneDegrees, pivot = center) {
             drawArc(
                 brush = Brush.sweepGradient(
                     colorStops = arrayOf(
-                        0.0f to White,
-                        0.25f to White.copy(alpha = 0.0f),
-                        0.50f to White.copy(alpha = 0.25f),
-                        0.75f to White.copy(alpha = 0.0f),
-                        1.0f to White
+                        0.0f to White.copy(alpha = 0.0f),
+                        sweepFactor to White.copy(alpha = 0.75f),
+                        sweepFactor + 0.01f to White.copy(alpha = 0f),
+                        1.0f to White.copy(alpha = 0f)
                     ),
                     center = center
                 ),
                 startAngle = 0f,
-                sweepAngle = -coneDegrees,
+                sweepAngle = coneDegrees,
                 useCenter = true,
                 topLeft = Offset(center.x - outerRadius, center.y - outerRadius),
                 size = Size(outerRadius * 2f, outerRadius * 2f),
@@ -136,17 +143,19 @@ fun DrawRadar(angle: Float, blips: List<RadarBlip>, innerRadius: Float, outerRad
         }
 
         // Blips
-        val currentAngle = angle % 360
-        val fadeRange = coneDegrees + (coneDegrees / 2f) // a bit higher than the cone's degrees
+        fun normalizeAngle(ang: Float): Float = (ang % 360f + 360f) % 360f
+
+        val currentHeadAngle = normalizeAngle(angle - 90f)
+        val fadeRange = coneDegrees * 1.25f
 
         blips.forEach{ blip ->
             val blipRadians = Math.toRadians(blip.angle.toDouble())
-
-            val blipX = center.x + ( cos(blipRadians).toFloat() * ( outerRadius * blip.distance ) )
-            val blipY = center.y + ( sin(blipRadians).toFloat() * ( outerRadius * blip.distance ) )
-
+            val blipX = center.x + (cos(blipRadians).toFloat() * (outerRadius * blip.distance))
+            val blipY = center.y + (sin(blipRadians).toFloat() * (outerRadius * blip.distance))
             val blipCenter = Offset(blipX, blipY)
-            val degreesSincePass = ( ( currentAngle - blip.angle ) + 360f ) % 360f
+
+            val blipAngNormalized = normalizeAngle(blip.angle)
+            val degreesSincePass = normalizeAngle(currentHeadAngle - blipAngNormalized)
 
             if( degreesSincePass < fadeRange ) {
                 val alpha = (1f - (degreesSincePass / fadeRange)).coerceIn(0f, 1f)

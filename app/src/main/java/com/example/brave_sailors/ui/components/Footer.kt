@@ -23,7 +23,7 @@ import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
 @Composable
-fun Footer(modifier: Modifier = Modifier) {
+fun Footer(modifier: Modifier = Modifier, statusText: String = ". starting") {
     val scale = RememberScaleConversion()
 
     Column(
@@ -57,16 +57,8 @@ fun Footer(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(scale.dp(20f)))
 
-        // [ TO - DO ]: The following component must be modified according to the ( initial ) connection's state
-        // The order of these sentences is:
-        // 0) . initialize social gaming network ( ? )
-        // 1) . connect to server
-        // 2) . retrieve data from server
-        // 3) . start up audio ( if we decide to implement such functionality )
-        // 4) . check consent and permissions
-        // 5) . starting
         Text(
-            ". starting",
+            text = statusText,
             color = LightGrey,
             fontFamily = FontFamily.SansSerif,
             fontWeight = FontWeight.Medium,

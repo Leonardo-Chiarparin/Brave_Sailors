@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.example.brave_sailors.R
-import com.example.brave_sailors.availableFlags
 import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.theme.Grey
 import com.example.brave_sailors.ui.theme.White
@@ -109,6 +108,9 @@ fun Tab(paddingH: Float, paddingV: Float, text: String) {
 
 @Composable
 fun Profile(viewModel: ProfileViewModel) {
+    val flagList = viewModel.flagList.collectAsState()
+    val availableFlags = flagList.value
+
     val user by viewModel.userState.collectAsState()
 
     val scale = RememberScaleConversion()
@@ -312,8 +314,12 @@ fun Profile(viewModel: ProfileViewModel) {
                             }
 
                             Image(
-                                painter = painterResource(id = currentFlag.resourceId),
-                                contentDescription = "Flag",
+                                painter = rememberAsyncImagePainter(
+                                    model = ImageRequest.Builder(LocalContext.current)
+                                        .data(currentFlag.flagUrl)
+                                        .build()
+                                ),
+                                contentDescription = currentFlag.name,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .width(scale.dp(168f))
