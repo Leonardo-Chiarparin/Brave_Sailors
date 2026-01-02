@@ -32,9 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -80,7 +78,7 @@ enum class OverlayProfileState {
 }
 
 @Composable
-fun ProfileScreen(isVisible: Boolean, viewModel: ProfileViewModel, onGetPhoto: (Uri) -> Unit, onOpenChangeFlag: () -> Unit, onOpenChangeName: () -> Unit, onOpenStatistics: () -> Unit, onOpenRankings: () -> Unit) {
+fun ProfileScreen(isVisible: Boolean, viewModel: ProfileViewModel, onGetPhoto: (Uri) -> Unit, onOpenChangeFlag: () -> Unit, onOpenChangeName: () -> Unit, onOpenStatistics: () -> Unit, onOpenRankings: () -> Unit, onOpenFriends: () -> Unit) {
     val context = LocalContext.current
 
     // --- LOGIC INTEGRATION START ---
@@ -91,9 +89,19 @@ fun ProfileScreen(isVisible: Boolean, viewModel: ProfileViewModel, onGetPhoto: (
     val availableFlags = flagList.value
 
     // 2. Camera Logic
-    var showDialogFilter by remember { mutableStateOf(false) }
-
-    var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
+    val cropOptions = remember {
+        CropImageContractOptions(
+            uri = null,
+            cropImageOptions = CropImageOptions(
+                imageSourceIncludeGallery = false,
+                imageSourceIncludeCamera = true,
+                guidelines = CropImageView.Guidelines.ON,
+                aspectRatioX = 1,
+                aspectRatioY = 1,
+                fixAspectRatio = true
+            )
+        )
+    }
 
     val cropImageLauncher = rememberLauncherForActivityResult(contract = CropImageContract()) { result ->
         if (result.isSuccessful) {
@@ -107,42 +115,20 @@ fun ProfileScreen(isVisible: Boolean, viewModel: ProfileViewModel, onGetPhoto: (
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            val options = CropImageContractOptions(
-                uri = null,
-                cropImageOptions = CropImageOptions(
-                    imageSourceIncludeGallery = false,
-                    imageSourceIncludeCamera = true,
-                    guidelines = CropImageView.Guidelines.ON,
-                    aspectRatioX = 1,
-                    aspectRatioY = 1,
-                    fixAspectRatio = true
-                )
-            )
-            cropImageLauncher.launch(options)
+            cropImageLauncher.launch(cropOptions)
         }
     }
 
     val onOpenChangePhoto: () -> Unit = {
         val permission = Manifest.permission.CAMERA
         if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) {
-            val options = CropImageContractOptions(
-                uri = null,
-                cropImageOptions = CropImageOptions(
-                    imageSourceIncludeGallery = false,
-                    imageSourceIncludeCamera = true,
-                    guidelines = CropImageView.Guidelines.ON,
-                    aspectRatioX = 1,
-                    aspectRatioY = 1,
-                    fixAspectRatio = true
-                )
-            )
-            cropImageLauncher.launch(options)
+            cropImageLauncher.launch(cropOptions)
         } else {
             cameraPermissionLauncher.launch(permission)
         }
     }
 
-    Modal(isVisible, user, availableFlags, viewModel, onOpenChangeFlag, onOpenChangeName, onOpenChangePhoto, onOpenStatistics, onOpenRankings)
+    Modal(isVisible, user, availableFlags, viewModel, onOpenChangeFlag, onOpenChangeName, onOpenChangePhoto, onOpenStatistics, onOpenRankings, onOpenFriends)
 }
 
 @Composable
@@ -155,7 +141,8 @@ private fun Modal(
     onOpenChangeName: () -> Unit,
     onOpenChangePhoto: () -> Unit,
     onOpenStatistics: () -> Unit,
-    onOpenRankings: () -> Unit
+    onOpenRankings: () -> Unit,
+    onOpenFriends: () -> Unit
 ) {
     val scale = RememberScaleConversion()
     val maxWidth = scale.dp(720f)
@@ -173,8 +160,6 @@ private fun Modal(
                 .padding(top = scale.dp(208f))
         ) {
             Column(
-                modifier = Modifier
-                    .graphicsLayer(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Top
             ) {
@@ -265,7 +250,8 @@ private fun Modal(
                                             onOpenChangeFlag = onOpenChangeFlag,
                                             onOpenChangePhoto = onOpenChangePhoto,
                                             onOpenStatistics = onOpenStatistics,
-                                            onOpenRankings = onOpenRankings
+                                            onOpenRankings = onOpenRankings,
+                                            onOpenFriends = onOpenFriends
                                         )
                                     }
                                 }
@@ -286,8 +272,10 @@ private fun EditSection(
     onOpenChangeFlag: () -> Unit,
     onOpenChangePhoto: () -> Unit,
     onOpenStatistics: () -> Unit,
-    onOpenRankings: () -> Unit
+    onOpenRankings: () -> Unit,
+    onOpenFriends: () -> Unit
 ) {
+    val context = LocalContext.current
     val currentFlag = remember(user?.countryCode, availableFlags) {
         availableFlags.find { it.code == user?.countryCode } ?: availableFlags.firstOrNull()
     }
@@ -372,9 +360,9 @@ private fun EditSection(
                     )
                 )
 
-                val painter = if (!user?.profilePictureUrl.isNullOrEmpty()) {
+                val portraitPainter = if (!user?.profilePictureUrl.isNullOrEmpty()) {
                     rememberAsyncImagePainter(
-                        model = ImageRequest.Builder(LocalContext.current)
+                        model = ImageRequest.Builder(context)
                             .data(user.profilePictureUrl)
                             // Force refresh if timestamp changes
                             .setParameter("key", user.lastUpdated)
@@ -387,7 +375,7 @@ private fun EditSection(
 
                 SixthButton(
                     onClick = onOpenChangePhoto, // Opens the camera
-                    imagePainter = painter
+                    imagePainter = portraitPainter
                 )
             }
 
@@ -416,13 +404,15 @@ private fun EditSection(
                     )
                 )
 
+                val flagPainter = rememberAsyncImagePainter(
+                    model = ImageRequest.Builder(context)
+                        .data(currentFlag?.flagUrl)
+                        .build()
+                )
+
                 SixthButton(
                     onClick = onOpenChangeFlag,
-                    imagePainter = rememberAsyncImagePainter(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(currentFlag?.flagUrl)
-                            .build()
-                        )
+                    imagePainter = flagPainter
                 )
             }
         }
@@ -434,13 +424,13 @@ private fun EditSection(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OverviewSection(onOpenStatistics, onOpenRankings)
+            OverviewSection(onOpenStatistics, onOpenRankings, onOpenFriends)
         }
     }
 }
 
 @Composable
-private fun OverviewSection(onOpenStatistics: () -> Unit, onOpenRankings: () -> Unit) {
+private fun OverviewSection(onOpenStatistics: () -> Unit, onOpenRankings: () -> Unit, onOpenFriends: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth(),
@@ -450,7 +440,7 @@ private fun OverviewSection(onOpenStatistics: () -> Unit, onOpenRankings: () -> 
         SeventhButton(
             text = "Friends",
             icon = Icons.Default.Groups,
-            onClick = {  }
+            onClick = onOpenFriends
         )
 
         SeventhButton(

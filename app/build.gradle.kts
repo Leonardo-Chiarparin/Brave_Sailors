@@ -51,7 +51,8 @@ android {
                 "src/main/res",
                 "src/main/res-intro",   // Directory for the "res-name" page
                 "src/main/res-terms",
-                "src/main/res-profile"
+                "src/main/res-profile",
+                "src/main/res-game-options"
             )
         }
     }
@@ -96,6 +97,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.ui.text)
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.testing)
     ksp("androidx.room:room-compiler:2.8.3")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

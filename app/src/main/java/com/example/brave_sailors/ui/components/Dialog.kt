@@ -77,8 +77,167 @@ import com.example.brave_sailors.ui.theme.DarkBlue
 import com.example.brave_sailors.ui.theme.DeepBlue
 import com.example.brave_sailors.ui.theme.LightBlue
 import com.example.brave_sailors.ui.theme.Orange
+import com.example.brave_sailors.ui.theme.TransparentGrey
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
+
+@Composable
+fun DialogFriend(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+
+    val boxShape = CutCornerShape(scale.dp(24f))
+    val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
+    val maxWidth = scale.dp(646f)
+
+    var friendIdText by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable(interactionSource = interactionSource, indication = null) {  }
+            .graphicsLayer(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = maxWidth),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = scale.dp(50f))
+                    .fillMaxWidth()
+                    .background(DarkBlue, shape = boxShape)
+                    .border(BorderStroke(scale.dp(1f), Orange), shape = boxShape)
+                    .clip(boxShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = scale.dp(28f), end = scale.dp(28f), bottom = scale.dp(28f), top = scale.dp(60f))
+                        .clip(RectangleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GridBackground(Modifier.matchParentSize(), color = LightBlue, 14f)
+
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = scale.dp(48f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(modifier = Modifier.height(scale.dp(64f)))
+
+                            Text(
+                                text = "Submitting a player's ID will initiate a new friendship request. These contacts are visible on the Multiplayer page via Lobby.",
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(22f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    ),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 4f
+                                    )
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(42f)))
+
+                            BasicTextField(
+                                value = friendIdText,
+                                onValueChange = { friendIdText = it },
+                                textStyle = TextStyle(
+                                    color = White,
+                                    fontSize = scale.sp(26f),
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = scale.sp(2f)
+                                ),
+                                singleLine = true,
+                                cursorBrush = SolidColor(White),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(scale.dp(64f))
+                                            .border(BorderStroke(scale.dp(1f), Orange))
+                                            .background(DarkBlue)
+                                            .padding(horizontal = scale.dp(24f)),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (friendIdText.isEmpty()) {
+                                            Text(
+                                                text = "Enter the ID ...",
+                                                style = TextStyle(
+                                                    color = Orange,
+                                                    fontSize = scale.sp(26f),
+                                                    fontFamily = FontFamily.SansSerif,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontStyle = FontStyle.Italic,
+                                                    letterSpacing = scale.sp(2f)
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(104f)))
+
+                            SecondaryButton(
+                                paddingH = 104f,
+                                paddingV = 24f,
+                                text = "OK",
+                                onClick = {
+                                    if (friendIdText.isNotBlank()) {
+                                        onConfirm(friendIdText)
+                                        onDismiss()
+                                    }
+                                },
+                                modifier = Modifier,
+                                enabled = friendIdText.isNotBlank()
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(28f)))
+                        }
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.zIndex(1f)) {
+                Tab(114f, 32f, text = "Add kith")
+            }
+
+            CloseButton(
+                onClick = onDismiss,
+                shape = closeButtonShape,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
+    }
+}
 
 @Composable
 fun DialogFilter(
@@ -242,8 +401,7 @@ fun DialogFilter(
 
                                 Row(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable(interactionSource = interactionSource, indication = null) { applyFilter = !applyFilter },
+                                        .fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Start
                                 ) {
@@ -252,10 +410,10 @@ fun DialogFilter(
                                     Box(
                                         modifier = Modifier
                                             .size(scale.dp(28f))
-                                            .background(Color.Transparent, CircleShape)
+                                            .background(if (applyFilter) Color(0xFF08F804) else Color.Transparent, CircleShape)
                                             .border(scale.dp(1f), White, CircleShape)
                                             .clip(CircleShape)
-                                            .background(if (applyFilter) Color(0xFF08F804) else Color.Transparent)
+                                            .clickable(interactionSource = interactionSource, indication = null) { applyFilter = !applyFilter }
                                     )
 
                                     Spacer(modifier = Modifier.width(scale.dp(24f)))
@@ -582,7 +740,7 @@ fun DialogName(
     val boxShape = CutCornerShape(scale.dp(24f)) // 24px
     val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
 
-    val maxWidth = scale.dp(648f) // 648px, etc.
+    val maxWidth = scale.dp(646f) // 646px, etc.
 
     var newName by remember(currentName) {
         mutableStateOf(
@@ -782,7 +940,7 @@ fun DialogInstructions(
     val scale = RememberScaleConversion()
     val interactionSource = remember { MutableInteractionSource() }
 
-    val maxWidth = scale.dp(648f)
+    val maxWidth = scale.dp(646f)
     val boxShape = CutCornerShape(scale.dp(24f))
     val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
 
@@ -853,7 +1011,7 @@ fun DialogInstructions(
                                             Text(
                                                 text = "Topic",
                                                 color = White,
-                                                fontSize = scale.sp(32f),
+                                                fontSize = scale.sp(30f),
                                                 textAlign = TextAlign.Center,
                                                 fontFamily = FontFamily.SansSerif,
                                                 fontWeight = FontWeight.Medium,
@@ -874,7 +1032,7 @@ fun DialogInstructions(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(scale.dp(194f))
+                                                .height(scale.dp(192f))
                                                 .background(Color(0xFF323432)),
                                             contentAlignment = Alignment.Center
                                         ) {
@@ -910,7 +1068,1285 @@ fun DialogInstructions(
             }
 
             Box(modifier = Modifier.zIndex(1f)) {
-                Tab(124f, 32f, text = "Instructions")
+                Tab(134f, 32f, text = "Instructions")
+            }
+
+            CloseButton(
+                onClick = onDismiss,
+                shape = closeButtonShape,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
+    }
+}
+
+@Composable
+fun DialogPassword(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+
+    val boxShape = CutCornerShape(scale.dp(24f))
+    val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
+    val maxWidth = scale.dp(646f)
+
+    var emailText by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) {  }
+            .graphicsLayer(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = maxWidth),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = scale.dp(50f))
+                    .fillMaxWidth()
+                    .background(DarkBlue, shape = boxShape)
+                    .border(BorderStroke(scale.dp(1f), Orange), shape = boxShape)
+                    .clip(boxShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = scale.dp(28f), end = scale.dp(28f), bottom = scale.dp(28f), top = scale.dp(58f))
+                        .clip(RectangleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GridBackground(Modifier.matchParentSize(), color = LightBlue, 14f)
+
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = scale.dp(44f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(modifier = Modifier.height(scale.dp(124f)))
+
+                            Text(
+                                text = "Enter the email address",
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(26f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    ),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 4f
+                                    )
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(94f)))
+
+                            BasicTextField(
+                                value = emailText,
+                                onValueChange = { emailText = it },
+                                textStyle = TextStyle(
+                                    color = White,
+                                    fontSize = scale.sp(26f),
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = scale.sp(2f)
+                                ),
+                                singleLine = true,
+                                cursorBrush = SolidColor(Color.Transparent),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(scale.dp(64f))
+                                            .border(BorderStroke(scale.dp(1f), Orange))
+                                            .background(DarkBlue)
+                                            .padding(horizontal = scale.dp(24f)),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (emailText.isEmpty()) {
+                                            Text(
+                                                text = "Type here...",
+                                                style = TextStyle(
+                                                    color = Orange,
+                                                    fontSize = scale.sp(26f),
+                                                    fontFamily = FontFamily.SansSerif,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontStyle = FontStyle.Italic,
+                                                    letterSpacing = scale.sp(2f)
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(102f)))
+
+                            SecondaryButton(
+                                paddingH = 104f,
+                                paddingV = 24f,
+                                text = "OK",
+                                onClick = {
+                                    if (emailText.isNotBlank()) {
+                                        onConfirm(emailText)
+                                        onDismiss()
+                                    }
+                                },
+                                modifier = Modifier,
+                                enabled = emailText.isNotBlank()
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(34f)))
+                        }
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.zIndex(1f)) {
+                Tab(58f, 32f, text = "Password recovery")
+            }
+
+            CloseButton(
+                onClick = onDismiss,
+                shape = closeButtonShape,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
+    }
+}
+
+@Composable
+fun DialogRegister(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit 
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+
+    val boxShape = CutCornerShape(scale.dp(24f))
+    val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
+    val maxWidth = scale.dp(646f)
+
+    var emailText by remember { mutableStateOf("") }
+    var passwordText by remember { mutableStateOf("") }
+    var confirmPasswordText by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { }
+            .graphicsLayer(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = maxWidth),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = scale.dp(50f))
+                    .fillMaxWidth()
+                    .background(DarkBlue, shape = boxShape)
+                    .border(BorderStroke(scale.dp(1f), Orange), shape = boxShape)
+                    .clip(boxShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = scale.dp(28f), end = scale.dp(28f), bottom = scale.dp(28f), top = scale.dp(58f))
+                        .clip(RectangleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GridBackground(Modifier.matchParentSize(), color = LightBlue, 14f)
+
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = scale.dp(38f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(modifier = Modifier.height(scale.dp(36f)))
+
+                            Text(
+                                text = "Users can provide their email address in order to use the same profile across multiple devices.",
+                                color = White,
+                                fontSize = scale.sp(26f),
+                                textAlign = TextAlign.Center,
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    ),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 4f
+                                    )
+                                ),
+                                modifier = Modifier.padding(horizontal = scale.dp(28f))
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(124f)))
+
+                            Text(
+                                text = "Email",
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(26f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    ),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 4f
+                                    )
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(20f)))
+
+                            BasicTextField(
+                                value = emailText,
+                                onValueChange = { emailText = it },
+                                textStyle = TextStyle(
+                                    color = White,
+                                    fontSize = scale.sp(26f),
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = scale.sp(2f)
+                                ),
+                                singleLine = true,
+                                cursorBrush = SolidColor(Color.Transparent),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(scale.dp(64f))
+                                            .border(BorderStroke(scale.dp(1f), Orange))
+                                            .background(DarkBlue)
+                                            .padding(horizontal = scale.dp(24f)),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (emailText.isEmpty()) {
+                                            Text(
+                                                text = "Enter the email address...",
+                                                style = TextStyle(
+                                                    color = Orange,
+                                                    fontSize = scale.sp(26f),
+                                                    fontFamily = FontFamily.SansSerif,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontStyle = FontStyle.Italic,
+                                                    letterSpacing = scale.sp(2f)
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(114f)))
+
+                            Text(
+                                text = "Password",
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(26f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    ),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 4f
+                                    )
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(20f)))
+
+                            BasicTextField(
+                                value = passwordText,
+                                onValueChange = { passwordText = it },
+                                textStyle = TextStyle(
+                                    color = White,
+                                    fontSize = scale.sp(26f),
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = scale.sp(2f)
+                                ),
+                                singleLine = true,
+                                cursorBrush = SolidColor(Color.Transparent),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(scale.dp(64f))
+                                            .border(BorderStroke(scale.dp(1f), Orange))
+                                            .background(DarkBlue)
+                                            .padding(horizontal = scale.dp(24f)),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (passwordText.isEmpty()) {
+                                            Text(
+                                                text = "Enter the password...",
+                                                style = TextStyle(
+                                                    color = Orange,
+                                                    fontSize = scale.sp(26f),
+                                                    fontFamily = FontFamily.SansSerif,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontStyle = FontStyle.Italic,
+                                                    letterSpacing = scale.sp(2f)
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(38f)))
+
+                            Text(
+                                text = "Re-enter password",
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(26f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    ),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 4f
+                                    )
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(20f)))
+
+                            BasicTextField(
+                                value = confirmPasswordText,
+                                onValueChange = { confirmPasswordText = it },
+                                textStyle = TextStyle(
+                                    color = White,
+                                    fontSize = scale.sp(26f),
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = scale.sp(2f)
+                                ),
+                                singleLine = true,
+                                cursorBrush = SolidColor(Color.Transparent),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(scale.dp(64f))
+                                            .border(BorderStroke(scale.dp(1f), Orange))
+                                            .background(DarkBlue)
+                                            .padding(horizontal = scale.dp(24f)),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (confirmPasswordText.isEmpty()) {
+                                            Text(
+                                                text = "Enter the password...",
+                                                style = TextStyle(
+                                                    color = Orange,
+                                                    fontSize = scale.sp(26f),
+                                                    fontFamily = FontFamily.SansSerif,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontStyle = FontStyle.Italic,
+                                                    letterSpacing = scale.sp(2f)
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(134f)))
+
+                            SecondaryButton(
+                                paddingH = 74f,
+                                paddingV = 24f,
+                                text = "Register",
+                                onClick = {
+                                    if (emailText.isNotBlank() &&
+                                        passwordText.isNotBlank() &&
+                                        passwordText == confirmPasswordText) {
+
+                                        onConfirm(emailText, passwordText)
+                                        onDismiss()
+                                    }
+                                },
+                                modifier = Modifier,
+                                enabled = emailText.isNotBlank() &&
+                                        passwordText.isNotBlank() &&
+                                        passwordText == confirmPasswordText
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(36f)))
+                        }
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.zIndex(1f)) {
+                Tab(58f, 32f, text = "Email submission")
+            }
+
+            CloseButton(
+                onClick = onDismiss,
+                shape = closeButtonShape,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
+    }
+}
+
+@Composable
+fun DialogAccess(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+
+    val boxShape = CutCornerShape(scale.dp(24f))
+    val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
+    val maxWidth = scale.dp(646f)
+
+    var emailText by remember { mutableStateOf("") }
+    var passwordText by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable(interactionSource = interactionSource, indication = null) {  }
+            .graphicsLayer(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = maxWidth),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = scale.dp(50f))
+                    .fillMaxWidth()
+                    .background(DarkBlue, shape = boxShape)
+                    .border(BorderStroke(scale.dp(1f), Orange), shape = boxShape)
+                    .clip(boxShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = scale.dp(28f), end = scale.dp(28f), bottom = scale.dp(28f), top = scale.dp(58f))
+                        .clip(RectangleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GridBackground(Modifier.matchParentSize(), color = LightBlue, 14f)
+
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = scale.dp(36f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(modifier = Modifier.height(scale.dp(38f)))
+
+                            Text(
+                                text = "Account sign-in. Warning: local data will be overwritten!",
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(26f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    ),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 4f
+                                    )
+                                ),
+                                modifier = Modifier.padding(horizontal = scale.dp(22f))
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(40f)))
+
+                            Text(
+                                text = "Email",
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(26f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    ),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 4f
+                                    )
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(20f)))
+
+                            BasicTextField(
+                                value = emailText,
+                                onValueChange = { emailText = it },
+                                textStyle = TextStyle(
+                                    color = White,
+                                    fontSize = scale.sp(26f),
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = scale.sp(2f)
+                                ),
+                                singleLine = true,
+                                cursorBrush = SolidColor(Color.Transparent),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(scale.dp(64f))
+                                            .border(BorderStroke(scale.dp(1f), Orange))
+                                            .background(DarkBlue)
+                                            .padding(horizontal = scale.dp(24f)),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (emailText.isEmpty()) {
+                                            Text(
+                                                text = "Enter the email address...",
+                                                style = TextStyle(
+                                                    color = Orange,
+                                                    fontSize = scale.sp(26f),
+                                                    fontFamily = FontFamily.SansSerif,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontStyle = FontStyle.Italic,
+                                                    letterSpacing = scale.sp(2f)
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(52f)))
+
+                            Text(
+                                text = "Password",
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(26f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    ),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 4f
+                                    )
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(20f)))
+
+                            BasicTextField(
+                                value = passwordText,
+                                onValueChange = { passwordText = it },
+                                textStyle = TextStyle(
+                                    color = White,
+                                    fontSize = scale.sp(26f),
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = scale.sp(2f)
+                                ),
+                                singleLine = true,
+                                cursorBrush = SolidColor(Color.Transparent),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(scale.dp(64f))
+                                            .border(BorderStroke(scale.dp(1f), Orange))
+                                            .background(DarkBlue)
+                                            .padding(horizontal = scale.dp(24f)),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (passwordText.isEmpty()) {
+                                            Text(
+                                                text = "Enter the password...",
+                                                style = TextStyle(
+                                                    color = Orange,
+                                                    fontSize = scale.sp(26f),
+                                                    fontFamily = FontFamily.SansSerif,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontStyle = FontStyle.Italic,
+                                                    letterSpacing = scale.sp(2f)
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(124f)))
+
+                            SecondaryButton(
+                                paddingH = 74f,
+                                paddingV = 24f,
+                                text = "Access",
+                                onClick = {
+                                    if (emailText.isNotBlank() && passwordText.isNotBlank()) {
+                                        onConfirm(emailText, passwordText)
+                                        onDismiss()
+                                    }
+                                },
+                                modifier = Modifier,
+                                enabled = emailText.isNotBlank() && passwordText.isNotBlank()
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(30f)))
+                        }
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.zIndex(1f)) {
+                Tab(134f, 32f, text = "Login")
+            }
+
+            CloseButton(onClick = onDismiss, shape = closeButtonShape, modifier = Modifier.align(Alignment.TopEnd))
+        }
+    }
+}
+
+@Composable
+fun DialogDeleteAccount(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+
+    val boxShape = CutCornerShape(scale.dp(24f))
+    val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
+    val maxWidth = scale.dp(646f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable(interactionSource = interactionSource, indication = null) {  }
+            .graphicsLayer(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = maxWidth),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = scale.dp(50f))
+                    .fillMaxWidth()
+                    .background(DarkBlue, shape = boxShape)
+                    .border(BorderStroke(scale.dp(1f), Orange), shape = boxShape)
+                    .clip(boxShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = scale.dp(28f), end = scale.dp(28f), bottom = scale.dp(28f), top = scale.dp(58f))
+                        .clip(RectangleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GridBackground(Modifier.matchParentSize(), color = LightBlue, 14f)
+
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = scale.dp(12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(modifier = Modifier.height(scale.dp(60f)))
+
+                            Text(
+                                text = "Proceed with account termination? Please note that erased data cannot be restored.",
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(26f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    ),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 4f
+                                    )
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(132f)))
+
+                            SecondaryButton(
+                                paddingH = 78f,
+                                paddingV = 24f,
+                                text = "Remove",
+                                onClick = {
+                                    onConfirm()
+                                    onDismiss()
+                                },
+                                modifier = Modifier
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(34f)))
+                        }
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.zIndex(1f)) {
+                Tab(70f, 32f, text = "Delete the profile")
+            }
+
+            CloseButton(onClick = onDismiss, shape = closeButtonShape, modifier = Modifier.align(Alignment.TopEnd))
+        }
+    }
+}
+
+@Composable
+fun DialogDifficulty(
+    currentDifficulty: String,
+    onDismiss: (String) -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+
+    val boxShape = CutCornerShape(scale.dp(24f))
+    val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
+    val maxWidth = scale.dp(646f)
+
+    var selectedDifficulty by remember { mutableStateOf(currentDifficulty) }
+
+    val description = when (selectedDifficulty) {
+        "Easy" -> "Random search. Chance target shots."
+        "Normal" -> "Random search. Smart target shots."
+        "Hard" -> "Intelligent search. Smart target shots."
+        else -> ""
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable(interactionSource = interactionSource, indication = null) {  }
+            .graphicsLayer(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = maxWidth),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = scale.dp(50f))
+                    .fillMaxWidth()
+                    .background(DarkBlue, shape = boxShape)
+                    .border(BorderStroke(scale.dp(1f), Orange), shape = boxShape)
+                    .clip(boxShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = scale.dp(6f), end = scale.dp(6f), bottom = scale.dp(28f), top = scale.dp(60f))
+                        .clip(RectangleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GridBackground(Modifier.matchParentSize(), color = LightBlue, 14f)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = scale.dp(28f)),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(modifier = Modifier.height(scale.dp(64f)))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            DifficultyOption(
+                                text = "Easy",
+                                isSelected = selectedDifficulty == "Easy",
+                                onClick = { selectedDifficulty = "Easy" }
+                            )
+
+                            DifficultyOption(
+                                text = "Normal",
+                                isSelected = selectedDifficulty == "Normal",
+                                onClick = { selectedDifficulty = "Normal" }
+                            )
+
+                            DifficultyOption(
+                                text = "Hard",
+                                isSelected = selectedDifficulty == "Hard",
+                                onClick = { selectedDifficulty = "Hard" }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(scale.dp(62f)))
+
+                        Text(
+                            text = description,
+                            color = White,
+                            textAlign = TextAlign.Center,
+                            fontSize = scale.sp(22f),
+                            fontFamily = FontFamily.SansSerif,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = scale.sp(2f),
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                lineHeightStyle = LineHeightStyle(
+                                    LineHeightStyle.Alignment.Center,
+                                    LineHeightStyle.Trim.Both
+                                ),
+                                shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                            ),
+                            modifier = Modifier.padding(horizontal = scale.dp(42f))
+                        )
+
+                        Spacer(modifier = Modifier.height(scale.dp(58f)))
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.zIndex(1f)) {
+                Tab(132f, 32f, text = "DIFFICULTY")
+            }
+
+            CloseButton(
+                onClick = {
+                    onDismiss(selectedDifficulty)
+                },
+                shape = closeButtonShape,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DifficultyOption(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+    val shape = CutCornerShape(scale.dp(14f))
+
+    val bgColor = if (isSelected) Orange else TransparentGrey.copy(alpha = 0.75f)
+
+    Box(
+        modifier = Modifier
+            .width(scale.dp(166f))
+            .height(scale.dp(78f))
+            .background(bgColor, shape)
+            .clip(shape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = White,
+            textAlign = TextAlign.Center,
+            fontSize = scale.sp(22f),
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = scale.sp(2f),
+            style = TextStyle(
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle = LineHeightStyle(
+                    LineHeightStyle.Alignment.Center,
+                    LineHeightStyle.Trim.Both
+                ),
+                shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+            )
+        )
+    }
+}
+
+@Composable
+fun DialogFiringRules(
+    currentRule: String,
+    onDismiss: (String) -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+
+    val boxShape = CutCornerShape(scale.dp(24f))
+    val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
+    val maxWidth = scale.dp(646f)
+
+    var selectedRule by remember { mutableStateOf(currentRule) }
+
+    val description = when (selectedRule) {
+        "Sequential hits" -> "Keep firing until a shot lands."
+        "Chain attacks" -> "Hit as long as ships remain."
+        "One shot" -> "Lone strike per turn."
+        else -> ""
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable(interactionSource = interactionSource, indication = null) {  }
+            .graphicsLayer(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = maxWidth),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = scale.dp(50f))
+                    .fillMaxWidth()
+                    .background(DarkBlue, shape = boxShape)
+                    .border(BorderStroke(scale.dp(1f), Orange), shape = boxShape)
+                    .clip(boxShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = scale.dp(6f), end = scale.dp(6f), bottom = scale.dp(28f), top = scale.dp(60f))
+                        .clip(RectangleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GridBackground(Modifier.matchParentSize(), color = LightBlue, 14f)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = scale.dp(82f)),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(modifier = Modifier.height(scale.dp(64f)))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RuleOption(
+                                text = "Sequential hits",
+                                isSelected = selectedRule == "Sequential hits",
+                                onClick = { selectedRule = "Sequential hits" }
+                            )
+
+                            Spacer(modifier = Modifier.width(scale.dp(30f)))
+
+                            RuleOption(
+                                text = "Chain attacks",
+                                isSelected = selectedRule == "Chain attacks",
+                                onClick = { selectedRule = "Chain attacks" }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(scale.dp(44f)))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RuleOption(
+                                text = "One shot",
+                                isSelected = selectedRule == "One shot",
+                                onClick = { selectedRule = "One shot" }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(scale.dp(50f)))
+
+                        Text(
+                            text = description,
+                            color = White,
+                            textAlign = TextAlign.Center,
+                            fontSize = scale.sp(24f),
+                            fontFamily = FontFamily.SansSerif,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = scale.sp(2f),
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                lineHeightStyle = LineHeightStyle(
+                                    LineHeightStyle.Alignment.Center,
+                                    LineHeightStyle.Trim.Both
+                                ),
+                                shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                            ),
+                            modifier = Modifier.padding(horizontal = scale.dp(38f))
+                        )
+
+                        Spacer(modifier = Modifier.height(scale.dp(104f)))
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.zIndex(1f)) {
+                Tab(78f, 32f, text = "FIRING RULES")
+            }
+
+            CloseButton(
+                onClick = {
+                    onDismiss(selectedRule)
+                },
+                shape = closeButtonShape,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RuleOption(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+    val shape = CutCornerShape(scale.dp(14f))
+
+    val bgColor = if (isSelected) Orange else TransparentGrey.copy(alpha = 0.75f)
+
+    Box(
+        modifier = Modifier
+            .width(scale.dp(216f))
+            .height(scale.dp(78f))
+            .background(bgColor, shape)
+            .clip(shape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = White,
+            textAlign = TextAlign.Center,
+            fontSize = scale.sp(24f),
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = scale.sp(2f),
+            style = TextStyle(
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle = LineHeightStyle(
+                    LineHeightStyle.Alignment.Center,
+                    LineHeightStyle.Trim.Both
+                ),
+                shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+            )
+        )
+    }
+}
+
+@Composable
+fun DialogError(
+    errorMessage: String,
+    onDismiss: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+
+    val boxShape = CutCornerShape(scale.dp(24f))
+    val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
+    val maxWidth = scale.dp(646f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable(interactionSource = interactionSource, indication = null) {  }
+            .graphicsLayer(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = maxWidth),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = scale.dp(50f))
+                    .fillMaxWidth()
+                    .background(DarkBlue, shape = boxShape)
+                    .border(BorderStroke(scale.dp(1f), Orange), shape = boxShape)
+                    .clip(boxShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = scale.dp(28f), end = scale.dp(28f), bottom = scale.dp(28f), top = scale.dp(60f))
+                        .clip(RectangleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GridBackground(Modifier.matchParentSize(), color = LightBlue, 14f)
+
+                    Box(
+                        modifier = Modifier
+                            .padding(start = scale.dp(166f), end = scale.dp(166f), top = scale.dp(158f), bottom = scale.dp(256f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = errorMessage,
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(24f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                    lineHeightStyle = LineHeightStyle(
+                                        LineHeightStyle.Alignment.Center,
+                                        LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.zIndex(1f)) {
+                Tab(66f, 32f, text = "Error message")
             }
 
             CloseButton(

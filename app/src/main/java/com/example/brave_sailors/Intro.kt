@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.imageLoader
 import coil.request.ImageRequest
+import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.data.remote.api.Flag
 import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.components.Footer
@@ -150,7 +151,7 @@ private fun Modal(viewModel: ProfileViewModel, onFinished: () -> Unit) {
         val result = awaitAll(timerJob, imagesJob)
 
         val (finalUser, finalFlags) = result[1] as Pair<*, *>
-        val safeUser = finalUser as? com.example.brave_sailors.data.local.database.entity.User
+        val safeUser = finalUser as? User
         val safeFlags = finalFlags as? List<Flag>
 
         launch {

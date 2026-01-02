@@ -1,7 +1,7 @@
 package com.example.brave_sailors
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.LocalOverscrollConfiguration
+import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -177,7 +177,9 @@ fun RankingsScreen(
                             .fillMaxWidth()
                             .height(listHeight)
                     ) {
-                        CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
+                        CompositionLocalProvider(
+                            LocalOverscrollFactory provides null
+                        ) {
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize(),
@@ -185,9 +187,6 @@ fun RankingsScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 itemsIndexed(rankingList) { _, player ->
-                                    val isCurrentUser = user != null && player.name == user.name
-                                    val borderColor = if (isCurrentUser) Orange else White
-
                                     val playerFlag = availableFlags.find { it.code == player.countryCode }
                                     val flagUrl = playerFlag?.flagUrl
 
@@ -195,7 +194,7 @@ fun RankingsScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(rowHeight)
-                                            .border(scale.dp(1f), borderColor)
+                                            .border(scale.dp(1f), White)
                                             .background(Color(0xFF505058))
                                             .padding(horizontal = scale.dp(38f)),
                                         verticalAlignment = Alignment.CenterVertically

@@ -115,7 +115,7 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
     // [ MEMO ]: Sizes are taken from 720 x 1600px mockup ( with 72dpi ) using the Redmi Note 10S
     val boxShape = CutCornerShape(scale.dp(24f)) // 24px
 
-    val maxWidth = scale.dp(648f) // 648px, etc.
+    val maxWidth = scale.dp(646f) // 646px, etc.
 
     // -- STATE ( implemented to persist across recompositions ) --
     var privacyAccepted by rememberSaveable { mutableStateOf(false) }
@@ -126,7 +126,7 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
     var isSignedIn by rememberSaveable { mutableStateOf(false) }
     var isSigningIn by remember { mutableStateOf(false) }
 
-    var isLocationCheckFinished by remember { mutableStateOf(false) }
+    var didLogin by remember { mutableStateOf(false) }
 
     var playerEmail by remember { mutableStateOf("") }
     var playerName by remember { mutableStateOf("Sailor") }
@@ -158,7 +158,11 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
             when (val result = googleSigning(context)) {
                 is SigningResult.Success -> {
                     val user = result.user
-                    pendingUser = user
+                    val userWithCountry = if (detectedCountryCode != null) {
+                        user.copy(countryCode = detectedCountryCode!!)
+                    } else user
+
+                    pendingUser = userWithCountry
                     isNewUser = result.isNewUser
 
                     playerName = user.googleName
@@ -214,24 +218,24 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
         if (fineGranted || coarseGranted) {
             detectCountryFromLocation(context) { countryCode ->
                 detectedCountryCode = countryCode.uppercase()
-                performLogin()
             }
-        }
-        else {
-            detectedCountryCode = "IT"
-            performLogin()
+        } else {
+            detectedCountryCode = "IT" // Fallback
         }
     }
 
     LaunchedEffect(Unit) {
-        // Location check
+        if (!didLogin) {
+            didLogin = true
+            performLogin()
+        }
+
         val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
         if (hasFine || hasCoarse) {
             detectCountryFromLocation(context) { countryCode ->
                 detectedCountryCode = countryCode.uppercase()
-                performLogin()
             }
         } else {
             locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
@@ -488,7 +492,7 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
         }
 
         Box(modifier = Modifier.zIndex(1f)) {
-            Tab(130f, 32f, text = "Consensus")
+            Tab(134f, 32f, text = "Consensus")
         }
     }
 }

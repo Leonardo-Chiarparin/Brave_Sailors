@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import com.example.brave_sailors.ui.components.DividerOrange
 import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.components.SixthButton
 import com.example.brave_sailors.ui.theme.DarkBlue
@@ -54,6 +55,11 @@ import com.example.brave_sailors.ui.utils.RememberScaleConversion
 fun GameOptionsScreen(
     onBack: () -> Unit
 ) {
+    Modal(onBack)
+}
+
+@Composable
+private fun Modal(onBack: () -> Unit) {
     val scale = RememberScaleConversion()
     val interactionSource = remember { MutableInteractionSource() }
     val maxWidth = scale.dp(720f)
@@ -102,7 +108,7 @@ fun GameOptionsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = scale.dp(16f), vertical = scale.dp(4f)),
+                    .padding(start = scale.dp(16f), end = scale.dp(16f), top = scale.dp(8f), bottom = scale.dp(4f)),
                 contentAlignment = Alignment.Center
             ) {
                 GridBackground(Modifier.matchParentSize(), color = LightBlue, 18f)
@@ -111,7 +117,7 @@ fun GameOptionsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Spacer(modifier = Modifier.height(scale.dp(46f)))
+                    Spacer(modifier = Modifier.height(scale.dp(42f)))
 
                     Text(
                         text = "GAME OPTIONS",
@@ -131,7 +137,7 @@ fun GameOptionsScreen(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(scale.dp(92f)))
+                    Spacer(modifier = Modifier.height(scale.dp(130f)))
 
                     Column(
                         modifier = Modifier
@@ -205,11 +211,11 @@ fun GameOptionsScreen(
                             ) {
                                 SixthButton(
                                     onClick = {  },
-                                    imagePainter = painterResource(id = R.drawable.ic_avatar_placeholder)                                 )
+                                    imagePainter = painterResource(id = R.drawable.ic_ai_avatar_placeholder)                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(scale.dp(48f)))
+                        Spacer(modifier = Modifier.height(scale.dp(50f)))
                     }
                 }
             }
@@ -317,7 +323,7 @@ fun GameOptionSwitch(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
                     tint = White,
-                    modifier = Modifier.size(scale.dp(34f))
+                    modifier = Modifier.size(scale.dp(36f))
                 )
             }
         } else {
@@ -331,7 +337,7 @@ fun GameOptionSwitch(
                     imageVector = Icons.Default.Close,
                     contentDescription = null,
                     tint = White,
-                    modifier = Modifier.size(scale.dp(40f))
+                    modifier = Modifier.size(scale.dp(42f))
                 )
             }
             Box(

@@ -45,7 +45,7 @@ fun MenuScreen(onOpenGameOptions: () -> Unit, onOpenAccountSettings: () -> Unit,
 
     LaunchedEffect(Unit) {
         isVisible = false
-        delay(300)
+        delay(200)
         isVisible = true
     }
 

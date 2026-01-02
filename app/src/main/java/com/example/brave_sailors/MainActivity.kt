@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,11 +24,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.brave_sailors.data.local.database.AppDatabase
+import com.example.brave_sailors.data.remote.api.RetrofitClient
+import com.example.brave_sailors.data.repository.UserRepository
 import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.model.ProfileViewModelFactory
 import com.example.brave_sailors.ui.theme.Brave_SailorsTheme
@@ -57,6 +64,9 @@ class MainActivity : ComponentActivity() {
         // Database
         val db = AppDatabase.getDatabase(this)
         val userDao = db.userDao()
+        val fleetDao = db.fleetDao()
+        val apiService = RetrofitClient.api
+        val userRepository = UserRepository(apiService, userDao, fleetDao)
 
         setContent {
             Brave_SailorsTheme {
@@ -66,10 +76,57 @@ class MainActivity : ComponentActivity() {
                 LockScreenOrientation(isPortrait = true)
 
                 val navController = rememberNavController()
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentRoute = navBackStackEntry?.destination?.route
 
                 val profileViewModel: ProfileViewModel = viewModel(
-                    factory = ProfileViewModelFactory(userDao)
+                    factory = ProfileViewModelFactory(userDao, fleetDao, userRepository)
                 )
+
+                // --- GLOBAL APP TIMEOUT LOGIC (1 MINUTE) ---
+                val lifecycleOwner = LocalLifecycleOwner.current
+                var lastBackgroundTime by remember { mutableStateOf(0L) }
+                val timeoutDuration = 60 * 1000L // 1 minute
+
+                DisposableEffect(lifecycleOwner) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        when (event) {
+                            Lifecycle.Event.ON_STOP -> {
+                                lastBackgroundTime = System.currentTimeMillis()
+                            }
+
+                            Lifecycle.Event.ON_RESUME -> {
+                                val currentTime = System.currentTimeMillis()
+                                val elapsedTime = currentTime - lastBackgroundTime
+
+                                if (lastBackgroundTime != 0L && elapsedTime >= timeoutDuration) {
+                                    // RESTART LOGIC:
+                                    // Trigger if NOT on "terms" or "loading".
+                                    // We allow trigger even if already on "intro" to restart the loading animation/data fetch.
+                                    val shouldRestart = currentRoute != "terms" && currentRoute != "loading"
+
+                                    if (shouldRestart) {
+                                        navController.navigate("loading") {
+                                            // Pop up to the very first route to reset the app state properly
+                                            popUpTo(navController.graph.startDestinationId) {
+                                                inclusive = false
+                                            }
+                                            launchSingleTop = true // Avoid multiple instances of "loading"
+                                        }
+                                    }
+                                }
+
+                                lastBackgroundTime = 0L
+                            }
+
+                            else -> {}
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose {
+                        lifecycleOwner.lifecycle.removeObserver(observer)
+                    }
+                }
 
                 // State used to determine the startDestination
                 var startDestination by remember { mutableStateOf<String?>(null) }
@@ -102,6 +159,7 @@ class MainActivity : ComponentActivity() {
                                 if (user != null) {
                                     profileViewModel.loadUser(user.id)
                                     profileViewModel.showHomeWelcome = true
+
                                     navController.navigate("intro") {
                                         popUpTo("loading") { inclusive = true }
                                     }

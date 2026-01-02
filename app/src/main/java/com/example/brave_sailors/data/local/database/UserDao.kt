@@ -4,9 +4,11 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction // ADDED: Necessary for the @Transaction annotation
 import androidx.room.Update
 import com.example.brave_sailors.data.local.database.entity.User
 import kotlinx.coroutines.flow.Flow
+import com.example.brave_sailors.data.local.database.entity.SavedShip
 
 @Dao
 interface UserDao {
@@ -53,4 +55,34 @@ interface UserDao {
     // The 'googlePhotoUrl' field remains untouched (preserving the original image).
     @Query("UPDATE users SET profilePictureUrl = :url, lastUpdated = :timestamp WHERE id = :id")
     suspend fun updateProfilePicture(id: String, url: String, timestamp: Long)
+
+    @Query("UPDATE users SET level = :level, currentXp = :xp, lastWinTimestamp = :timestamp WHERE id = :id")
+    suspend fun updateGameStats(id: String, level: Int, xp: Int, timestamp: Long)
+
+    @Query("UPDATE users SET sessionToken = NULL WHERE id = :userId")
+    suspend fun clearSession(userId: String)
+}
+
+@Dao
+interface FleetDao {
+
+    // Retrieves the list of ships saved by a specific user to reconstruct the fleet
+    @Query("SELECT * FROM user_fleet WHERE userId = :userId")
+    suspend fun getUserFleet(userId: String): List<SavedShip>
+
+    // Inserts or updates the list of ships in bulk
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveFleet(ships: List<SavedShip>)
+
+    // Removes all ships associated with a user (useful before saving a new configuration)
+    @Query("DELETE FROM user_fleet WHERE userId = :userId")
+    suspend fun clearUserFleet(userId: String)
+
+    // Atomic operation: clears the old fleet and saves the new one in a single transaction
+    // This prevents data inconsistency (e.g., having duplicate ships or mixed states)
+    @Transaction
+    suspend fun replaceUserFleet(userId: String, ships: List<SavedShip>) {
+        clearUserFleet(userId)
+        saveFleet(ships)
+    }
 }

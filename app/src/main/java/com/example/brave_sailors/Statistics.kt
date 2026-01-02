@@ -1,7 +1,5 @@
 package com.example.brave_sailors
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.LocalOverscrollConfiguration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,15 +16,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import com.example.brave_sailors.data.local.database.entity.User
+import com.example.brave_sailors.ui.components.DividerOrange
 import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.theme.DarkBlue
 import com.example.brave_sailors.ui.theme.DeepBlue
@@ -53,6 +49,14 @@ import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
 @Composable
 fun StatisticsScreen(
+    user: User?,
+    onBack: () -> Unit
+) {
+    Modal(user, onBack)
+}
+
+@Composable
+private fun Modal(
     user: User?,
     onBack: () -> Unit
 ) {
@@ -344,15 +348,4 @@ fun StatisticsScreen(
             }
         }
     }
-}
-
-@Composable
-fun DividerOrange() {
-    val scale = RememberScaleConversion()
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(scale.dp(2f))
-            .background(Orange)
-    )
 }

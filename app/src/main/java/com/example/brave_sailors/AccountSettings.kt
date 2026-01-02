@@ -49,7 +49,23 @@ import com.example.brave_sailors.ui.utils.RememberScaleConversion
 @Composable
 fun AccountSettingsScreen(
     user: User?,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenPasswordRecovery: () -> Unit,
+    onOpenRegister: () -> Unit,
+    onOpenAccess: () -> Unit,
+    onOpenDeleteAccount: () -> Unit
+) {
+    Modal(user, onBack, onOpenPasswordRecovery, onOpenRegister, onOpenAccess, onOpenDeleteAccount)
+}
+
+@Composable
+private fun Modal(
+    user: User?,
+    onBack: () -> Unit,
+    onOpenPasswordRecovery: () -> Unit,
+    onOpenRegister: () -> Unit,
+    onOpenAccess: () -> Unit,
+    onOpenDeleteAccount: () -> Unit
 ) {
     val scale = RememberScaleConversion()
     val interactionSource = remember { MutableInteractionSource() }
@@ -62,80 +78,64 @@ fun AccountSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopCenter
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = maxWidth)
-                .background(DarkBlue)
-                .drawBehind {
-                    val h = size.height
-                    val w = size.width
-                    val stroke = strokeDp.toPx()
-                    val halfStroke = stroke / 2f
-
-                    drawLine(
-                        color = Orange,
-                        start = Offset(0f, halfStroke),
-                        end = Offset(w, halfStroke),
-                        strokeWidth = stroke
-                    )
-
-                    drawLine(
-                        color = Orange,
-                        start = Offset(0f, h - halfStroke),
-                        end = Offset(w, h - halfStroke),
-                        strokeWidth = stroke
-                    )
-                },
-            contentAlignment = Alignment.TopCenter
+                .padding(top = scale.dp(396f)),
+            contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = scale.dp(16f), vertical = scale.dp(4f)),
-                contentAlignment = Alignment.Center
-            ) {
-                GridBackground(Modifier.matchParentSize(), color = LightBlue, 18f)
+                    .widthIn(max = maxWidth)
+                    .background(DarkBlue)
+                    .drawBehind {
+                        val h = size.height
+                        val w = size.width
+                        val stroke = strokeDp.toPx()
+                        val halfStroke = stroke / 2f
 
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Spacer(modifier = Modifier.height(scale.dp(22f)))
-
-                    Text(
-                        text = "ACCOUNT SETTINGS AND\nSUPPORT",
-                        color = White,
-                        fontSize = scale.sp(34f),
-                        textAlign = TextAlign.Center,
-                        fontFamily = FontFamily.SansSerif,
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = scale.sp(2f),
-                        style = TextStyle(
-                            platformStyle = PlatformTextStyle(includeFontPadding = false),
-                            lineHeightStyle = LineHeightStyle(
-                                LineHeightStyle.Alignment.Center,
-                                LineHeightStyle.Trim.Both
-                            ),
-                            shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                        drawLine(
+                            color = Orange,
+                            start = Offset(0f, halfStroke),
+                            end = Offset(w, halfStroke),
+                            strokeWidth = stroke
                         )
-                    )
 
-                    Spacer(modifier = Modifier.height(scale.dp(76f)))
+                        drawLine(
+                            color = Orange,
+                            start = Offset(0f, h - halfStroke),
+                            end = Offset(w, h - halfStroke),
+                            strokeWidth = stroke
+                        )
+                    },
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = scale.dp(16f),
+                            end = scale.dp(16f),
+                            top = scale.dp(8f),
+                            bottom = scale.dp(4f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GridBackground(Modifier.matchParentSize(), color = LightBlue, 18f)
 
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = scale.dp(72f)),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Top
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        Spacer(modifier = Modifier.height(scale.dp(18f)))
+
                         Text(
-                            text = "Users can register their email address to play on various devices with the\nsame profile.",
+                            text = "ACCOUNT SETTINGS AND\nSUPPORT",
                             color = White,
-                            fontSize = scale.sp(24f),
+                            fontSize = scale.sp(34f),
                             textAlign = TextAlign.Center,
                             fontFamily = FontFamily.SansSerif,
                             fontWeight = FontWeight.Medium,
@@ -147,53 +147,22 @@ fun AccountSettingsScreen(
                                     LineHeightStyle.Trim.Both
                                 ),
                                 shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
-                            ),
-                            modifier = Modifier.padding(horizontal = scale.dp(20f))
+                            )
                         )
 
-                        Spacer(modifier = Modifier.height(scale.dp(108f)))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            SecondaryButton(
-                                paddingH = 34f,
-                                paddingV = 20f,
-                                text = "Reset",
-                                onClick = { }
-                            )
-
-                            Spacer(modifier = Modifier.width(scale.dp(26f)))
-
-                            SecondaryButton(
-                                paddingH = 34f,
-                                paddingV = 20f,
-                                text = "Enter",
-                                onClick = { }
-                            )
-
-                            Spacer(modifier = Modifier.width(scale.dp(26f)))
-
-                            SecondaryButton(
-                                paddingH = 34f,
-                                paddingV = 20f,
-                                text = "Login",
-                                onClick = { }
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(scale.dp(82f)))
+                        Spacer(modifier = Modifier.height(scale.dp(76f)))
 
                         Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = scale.dp(72f)),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Top
                         ) {
                             Text(
-                                text = "Account ID: ${user?.id}",
+                                text = "Users can provide their email address in order to use the same profile across multiple devices.",
                                 color = White,
-                                fontSize = scale.sp(20f),
+                                fontSize = scale.sp(24f),
                                 textAlign = TextAlign.Center,
                                 fontFamily = FontFamily.SansSerif,
                                 fontWeight = FontWeight.Medium,
@@ -205,85 +174,144 @@ fun AccountSettingsScreen(
                                         LineHeightStyle.Trim.Both
                                     ),
                                     shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
-                                )
+                                ),
+                                modifier = Modifier.padding(horizontal = scale.dp(20f))
                             )
 
-                            Spacer(modifier = Modifier.height(scale.dp(8f)))
+                            Spacer(modifier = Modifier.height(scale.dp(110f)))
 
-                            Text(
-                                text = "GameVersion: 1.1.138",
-                                color = White,
-                                fontSize = scale.sp(20f),
-                                textAlign = TextAlign.Center,
-                                fontFamily = FontFamily.SansSerif,
-                                fontWeight = FontWeight.Medium,
-                                letterSpacing = scale.sp(2f),
-                                style = TextStyle(
-                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                    lineHeightStyle = LineHeightStyle(
-                                        LineHeightStyle.Alignment.Center,
-                                        LineHeightStyle.Trim.Both
-                                    ),
-                                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SecondaryButton(
+                                    paddingH = 34f,
+                                    paddingV = 20f,
+                                    text = "Password",
+                                    onClick = onOpenPasswordRecovery
                                 )
+
+                                Spacer(modifier = Modifier.width(scale.dp(26f)))
+
+                                SecondaryButton(
+                                    paddingH = 34f,
+                                    paddingV = 20f,
+                                    text = "Register",
+                                    onClick = onOpenRegister
+                                )
+
+                                Spacer(modifier = Modifier.width(scale.dp(26f)))
+
+                                SecondaryButton(
+                                    paddingH = 34f,
+                                    paddingV = 20f,
+                                    text = "Access",
+                                    onClick = onOpenAccess
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(scale.dp(82f)))
+
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Account ID: ${user?.id}",
+                                    color = White,
+                                    fontSize = scale.sp(20f),
+                                    textAlign = TextAlign.Center,
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = scale.sp(2f),
+                                    style = TextStyle(
+                                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                        lineHeightStyle = LineHeightStyle(
+                                            LineHeightStyle.Alignment.Center,
+                                            LineHeightStyle.Trim.Both
+                                        ),
+                                        shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                                    )
+                                )
+
+                                Spacer(modifier = Modifier.height(scale.dp(8f)))
+
+                                Text(
+                                    text = "GameVersion: 1.1.138",
+                                    color = White,
+                                    fontSize = scale.sp(20f),
+                                    textAlign = TextAlign.Center,
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = scale.sp(2f),
+                                    style = TextStyle(
+                                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                        lineHeightStyle = LineHeightStyle(
+                                            LineHeightStyle.Alignment.Center,
+                                            LineHeightStyle.Trim.Both
+                                        ),
+                                        shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                                    )
+                                )
+
+                                Spacer(modifier = Modifier.height(scale.dp(8f)))
+
+                                Text(
+                                    text = "Authentication: Google",
+                                    color = White,
+                                    fontSize = scale.sp(20f),
+                                    textAlign = TextAlign.Center,
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = scale.sp(2f),
+                                    style = TextStyle(
+                                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                        lineHeightStyle = LineHeightStyle(
+                                            LineHeightStyle.Alignment.Center,
+                                            LineHeightStyle.Trim.Both
+                                        ),
+                                        shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                                    )
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(scale.dp(70f)))
+
+                            SecondaryButton(
+                                paddingH = 52f,
+                                paddingV = 22f,
+                                text = "Delete the profile",
+                                onClick = onOpenDeleteAccount,
+                                modifier = Modifier
                             )
 
-                            Spacer(modifier = Modifier.height(scale.dp(8f)))
-
-                            Text(
-                                text = "Authentication: Google",
-                                color = White,
-                                fontSize = scale.sp(20f),
-                                textAlign = TextAlign.Center,
-                                fontFamily = FontFamily.SansSerif,
-                                fontWeight = FontWeight.Medium,
-                                letterSpacing = scale.sp(2f),
-                                style = TextStyle(
-                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                    lineHeightStyle = LineHeightStyle(
-                                        LineHeightStyle.Alignment.Center,
-                                        LineHeightStyle.Trim.Both
-                                    ),
-                                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
-                                )
-                            )
+                            Spacer(modifier = Modifier.height(scale.dp(60f)))
                         }
-
-                        Spacer(modifier = Modifier.height(scale.dp(70f)))
-
-                        SecondaryButton(
-                            paddingH = 54f,
-                            paddingV = 22f,
-                            text = "Delete the account",
-                            onClick = { },
-                            modifier = Modifier
-                        )
-
-                        Spacer(modifier = Modifier.height(scale.dp(60f)))
                     }
                 }
-            }
 
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .background(DarkBlue, shape = closeButtonShape)
-                    .border(scale.dp(1f), Orange, shape = closeButtonShape)
-                    .clip(closeButtonShape)
-                    .size(scale.dp(92f))
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = null,
-                        onClick = onBack
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
-                    tint = White,
-                    modifier = Modifier.size(scale.dp(38f))
-                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .background(DarkBlue, shape = closeButtonShape)
+                        .border(scale.dp(1f), Orange, shape = closeButtonShape)
+                        .clip(closeButtonShape)
+                        .size(scale.dp(92f))
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = onBack
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = White,
+                        modifier = Modifier.size(scale.dp(38f))
+                    )
+                }
             }
         }
     }
