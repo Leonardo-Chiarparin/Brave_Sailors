@@ -78,17 +78,10 @@ enum class OverlayProfileState {
 }
 
 @Composable
-fun ProfileScreen(isVisible: Boolean, viewModel: ProfileViewModel, onGetPhoto: (Uri) -> Unit, onOpenChangeFlag: () -> Unit, onOpenChangeName: () -> Unit, onOpenStatistics: () -> Unit, onOpenRankings: () -> Unit, onOpenFriends: () -> Unit) {
+fun ProfileScreen(isVisible: Boolean, user: User?, availableFlags: List<Flag>, viewModel: ProfileViewModel, onGetPhoto: (Uri) -> Unit, onOpenChangeFlag: () -> Unit, onOpenChangeName: () -> Unit, onOpenStatistics: () -> Unit, onOpenRankings: () -> Unit, onOpenFriends: () -> Unit) {
     val context = LocalContext.current
 
-    // --- LOGIC INTEGRATION START ---
-
-    // 1. Observing user state from DB
-    val user by viewModel.userState.collectAsState()
-    val flagList = viewModel.flagList.collectAsState()
-    val availableFlags = flagList.value
-
-    // 2. Camera Logic
+    // -- CAMERA LOGIC INTEGRATION START --
     val cropOptions = remember {
         CropImageContractOptions(
             uri = null,
@@ -174,7 +167,6 @@ private fun Modal(
                         animationSpec = tween(durationMillis = 200)
                     ) + fadeOut(animationSpec = tween(200))
                 ) {
-                    // [ NOTE ]: A possible refactoring may be needed even at this point of the code
                     Profile(viewModel = viewModel)
                 }
 

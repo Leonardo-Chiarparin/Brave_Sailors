@@ -12,6 +12,7 @@ import com.example.brave_sailors.ui.utils.RememberScaleConversion
 @Composable
 fun DividerOrange() {
     val scale = RememberScaleConversion()
+
     Box(
         modifier = Modifier
             .fillMaxWidth()

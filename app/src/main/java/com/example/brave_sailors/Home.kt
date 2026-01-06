@@ -1,7 +1,6 @@
 package com.example.brave_sailors
 
 import android.annotation.SuppressLint
-import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -16,17 +15,12 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,20 +28,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,21 +40,17 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -80,11 +59,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.credentials.ClearCredentialStateRequest
+import androidx.credentials.CredentialManager
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.imageLoader
@@ -92,12 +70,12 @@ import coil.request.ImageRequest
 import com.example.brave_sailors.data.local.database.AppDatabase
 import com.example.brave_sailors.data.remote.api.RetrofitClient
 import com.example.brave_sailors.data.repository.UserRepository
-import com.example.brave_sailors.model.FleetPlacedShip
-import com.example.brave_sailors.model.FleetUiEvent
-import com.example.brave_sailors.model.FleetViewModel
-import com.example.brave_sailors.model.FleetViewModelFactory
 import com.example.brave_sailors.model.ProfileViewModel
-import com.example.brave_sailors.model.ShipOrientation
+import com.example.brave_sailors.model.ProfileViewModelFactory
+import com.example.brave_sailors.model.RegisterUiState
+import com.example.brave_sailors.model.RegisterViewModel
+import com.example.brave_sailors.model.RegisterViewModelFactory
+import com.example.brave_sailors.ui.components.ActiveDialog
 import com.example.brave_sailors.ui.components.Arrow
 import com.example.brave_sailors.ui.components.DialogAccess
 import com.example.brave_sailors.ui.components.DialogDeleteAccount
@@ -106,9 +84,11 @@ import com.example.brave_sailors.ui.components.DialogFilter
 import com.example.brave_sailors.ui.components.DialogFlag
 import com.example.brave_sailors.ui.components.DialogFriend
 import com.example.brave_sailors.ui.components.DialogInstructions
+import com.example.brave_sailors.ui.components.DialogLoading
 import com.example.brave_sailors.ui.components.DialogName
 import com.example.brave_sailors.ui.components.DialogPassword
 import com.example.brave_sailors.ui.components.DialogRegister
+import com.example.brave_sailors.ui.components.DialogSource
 import com.example.brave_sailors.ui.components.MosaicBackground
 import com.example.brave_sailors.ui.components.NavigationBar
 import com.example.brave_sailors.ui.components.NavigationConstants.TOTAL_DURATION
@@ -117,35 +97,44 @@ import com.example.brave_sailors.ui.components.Popup
 import com.example.brave_sailors.ui.components.TertiaryButton
 import com.example.brave_sailors.ui.theme.LightGrey
 import com.example.brave_sailors.ui.theme.White
+import com.example.brave_sailors.ui.utils.BackPress
 import com.example.brave_sailors.ui.utils.GameModeIcons
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 import com.example.brave_sailors.ui.utils.gameModes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 enum class OverlayHomeState {
     IDLE,
     EXITING_HOME,
-    SHOWING_DETAILS
+    SHOWING_DETAILS,
+    EXITING_DETAILS,
+    SHOWING_LOBBY,
+    LOADING_MATCH,
+    SHOWING_GUEST_FLEET,
+    EXITING_GUEST_FLEET,
+    PLAYING_VS_COMPUTER,
+    PLAYING_VS_GUEST,
+    PLAYING_VS_FRIEND
 }
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
-fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: ProfileViewModel, onNavigateToTerms: () -> Unit) {
+fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: ProfileViewModel, onRestart: () -> Unit) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope() // Scope to launch clearCredentialState
+    
     var currentScreen by remember { mutableStateOf(NavigationItem.Home) }
 
     var isContentVisible by remember { mutableStateOf(false) }
 
-    // -- PROFILE DIALOGS --
-    var showDialogFilter by remember { mutableStateOf(false) }
-    var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
+    // -- DIALOG ( only the required ones, the others are treated differently ) --
+    var activeDialog by remember { mutableStateOf<ActiveDialog>(ActiveDialog.None) }
 
-    var showDialogFlag by remember { mutableStateOf(false) }
-    var showDialogName by remember { mutableStateOf(false) }
-    var showDialogFriends by remember { mutableStateOf(false) }
+    // -- CHALLENGE STATE --
+    var overlayChallengeState by remember { mutableStateOf(OverlayChallengeState.IDLE) }
+    var targetChallengeState by remember { mutableStateOf(OverlayChallengeState.IDLE) }
 
     // -- PROFILE STATE --
     var overlayProfileState by remember { mutableStateOf(OverlayProfileState.IDLE) }
@@ -155,25 +144,31 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
     var overlayMenuState by remember { mutableStateOf(OverlayMenuState.IDLE) }
     var targetMenuState by remember { mutableStateOf(OverlayMenuState.IDLE) }
 
-    // -- ACCOUNT SETTINGS' DIALOGS --
-    var showDialogPassword by remember { mutableStateOf(false) }
-    var showDialogRegister by remember { mutableStateOf(false) }
-    var showDialogAccess by remember { mutableStateOf(false) }
-    var showDialogDeleteAccount by remember { mutableStateOf(false) }
-
     // -- HOME STATE --
     var overlayHomeState by remember { mutableStateOf(OverlayHomeState.IDLE) }
     var targetHomeState by remember { mutableStateOf(OverlayHomeState.IDLE) }
-    var chosenGameModeIndex by remember { mutableIntStateOf(0) }
 
-    // -- ERROR DIALOG --
-    var showDialogError by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("Please try again.") }
+    var chosenGameModeIndex by remember { mutableIntStateOf(0) }
+    var chosenDifficulty: String? by remember { mutableStateOf("Normal") }
+    var chosenFiringRule by remember { mutableStateOf("Chain attacks") }
+
+    // --- DEPENDENCIES & VIEW MODELS ---
+    val db = AppDatabase.getDatabase(context)
+    val api = RetrofitClient.api
+
+    val repository = remember { UserRepository(api, db.userDao(), db.fleetDao(), db.friendDao()) }
+
+    val registerViewModel: RegisterViewModel = viewModel(factory = RegisterViewModelFactory(repository))
+    val profileViewModel: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(db.userDao(), db.fleetDao(), repository))
+
+    // -- ACCOUNT SETTINGS STATE --
+    val uiStateAS = registerViewModel.uiState
 
     val scale = RememberScaleConversion()
 
-    // -- STATES --
     var showGooglePopup by remember { mutableStateOf(false) }
+
+    // -- USER AND FLAGS --
     val flagList = viewModel.flagList.collectAsState()
     val user = viewModel.userState.collectAsState()
 
@@ -181,6 +176,93 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
     val entry = user.value
 
     val forceLogout by viewModel.forceLogoutEvent.collectAsState()
+
+    BackPress {
+        // It returns true if an overlay is present ( consuming the event and going back to the previous screen ), conversely the app will be minimized ( suspended in background )
+        if (activeDialog != ActiveDialog.None) {
+            when (val dialog = activeDialog) {
+                is ActiveDialog.Register,
+                is ActiveDialog.Access -> {
+                    registerViewModel.resetState()
+                    activeDialog = ActiveDialog.None
+                }
+                is ActiveDialog.Error -> {
+                    activeDialog = when (dialog.source) {
+                        DialogSource.REGISTER -> { registerViewModel.resetState(); ActiveDialog.Register }
+                        DialogSource.ACCESS -> { registerViewModel.resetState(); ActiveDialog.Access }
+                        DialogSource.PASSWORD -> ActiveDialog.None
+                        DialogSource.DELETE -> ActiveDialog.None
+                        DialogSource.FRIEND -> ActiveDialog.Friend
+                        else -> ActiveDialog.None
+                    }
+                }
+                else -> {
+                    activeDialog = ActiveDialog.None
+                }
+            }
+
+            true
+        }
+        else {
+            when {
+                overlayChallengeState == OverlayChallengeState.SHOWING_TORPEDO ||
+                        overlayChallengeState == OverlayChallengeState.SHOWING_CARGO ||
+                        overlayChallengeState == OverlayChallengeState.SHOWING_BILGE -> {
+                    overlayChallengeState = OverlayChallengeState.IDLE
+                    true
+                }
+
+                overlayMenuState != OverlayMenuState.IDLE -> {
+                    overlayMenuState = if (overlayMenuState == OverlayMenuState.SHOWING_OPTIONS ||
+                        overlayMenuState == OverlayMenuState.SHOWING_SETTINGS ||
+                        overlayMenuState == OverlayMenuState.SHOWING_INSTRUCTIONS
+                    ) {
+                        OverlayMenuState.IDLE
+                    } else {
+                        OverlayMenuState.IDLE
+                    }
+                    true
+                }
+
+                overlayProfileState != OverlayProfileState.IDLE -> {
+                    overlayProfileState =
+                        if (overlayProfileState == OverlayProfileState.SHOWING_STATS ||
+                            overlayProfileState == OverlayProfileState.SHOWING_RANKINGS
+                        ) {
+                            OverlayProfileState.IDLE
+                        } else {
+                            OverlayProfileState.IDLE
+                        }
+                    true
+                }
+
+                overlayHomeState != OverlayHomeState.IDLE -> {
+                    when (overlayHomeState) {
+                        OverlayHomeState.SHOWING_LOBBY, OverlayHomeState.SHOWING_GUEST_FLEET -> {
+                            overlayHomeState = OverlayHomeState.SHOWING_DETAILS
+                            true
+                        }
+
+                        OverlayHomeState.SHOWING_DETAILS -> {
+                            overlayHomeState = OverlayHomeState.IDLE
+                            true
+                        }
+
+                        OverlayHomeState.PLAYING_VS_COMPUTER, OverlayHomeState.PLAYING_VS_GUEST, OverlayHomeState.PLAYING_VS_FRIEND -> {
+                            false
+                        }
+
+                        else -> {
+                            overlayHomeState = OverlayHomeState.IDLE
+                            true
+                        }
+                    }
+                }
+
+                else -> false
+            }
+        }
+    }
 
     LaunchedEffect(viewModel.showHomeWelcome, entry) {
         if (viewModel.showHomeWelcome && entry != null) {
@@ -205,9 +287,36 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
         isContentVisible = true
     }
 
+    // Security check: perform logout if session expires or conflicts are detected
     if (forceLogout) {
         viewModel.performLocalLogout()
-        onNavigateToTerms()
+        onRestart()
+    }
+
+    LaunchedEffect(uiStateAS) {
+        when (uiStateAS) {
+            is RegisterUiState.Success -> {
+                registerViewModel.resetState()
+
+                if (activeDialog == ActiveDialog.Access)
+                    onRestart()
+            }
+
+            is RegisterUiState.Error -> {
+                val source = when (activeDialog) {
+                    is ActiveDialog.Register -> DialogSource.REGISTER
+                    is ActiveDialog.Access -> DialogSource.ACCESS
+                    is ActiveDialog.Password -> DialogSource.PASSWORD
+                    is ActiveDialog.DeleteAccount -> DialogSource.DELETE
+                    is ActiveDialog.Friend -> DialogSource.FRIEND
+                    else -> DialogSource.NONE
+                }
+
+                activeDialog = ActiveDialog.Error(uiStateAS.message, source)
+            }
+
+            else -> {  }
+        }
     }
 
     Box(
@@ -221,12 +330,16 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                 .fillMaxSize(),
             containerColor = Color.Transparent,
             bottomBar = {
+                val isPlayingMiniGame = overlayChallengeState == OverlayChallengeState.SHOWING_TORPEDO ||
+                        overlayChallengeState == OverlayChallengeState.SHOWING_CARGO ||
+                        overlayChallengeState == OverlayChallengeState.SHOWING_BILGE
+
                 AnimatedVisibility(
-                    visible = overlayHomeState == OverlayHomeState.IDLE,
+                    visible = overlayHomeState == OverlayHomeState.IDLE && !isPlayingMiniGame,
                     enter = slideInVertically(
                         initialOffsetY = { it },
-                        animationSpec = tween(durationMillis = 0)
-                    ) + fadeIn(animationSpec = tween(0)),
+                        animationSpec = tween(durationMillis = 300)
+                    ) + fadeIn(animationSpec = tween(300)),
                     exit = slideOutVertically(
                         targetOffsetY = { it },
                         animationSpec = tween(durationMillis = 200)
@@ -241,6 +354,7 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                                 overlayProfileState = OverlayProfileState.IDLE
                                 overlayMenuState = OverlayMenuState.IDLE
                                 overlayHomeState = OverlayHomeState.IDLE
+                                overlayChallengeState = OverlayChallengeState.IDLE
                             }
                         }
                     )
@@ -256,13 +370,17 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                 when (currentScreen) {
                     NavigationItem.Home -> {
                         LaunchedEffect(overlayHomeState) { 
-                            if (overlayHomeState == OverlayHomeState.EXITING_HOME) {
+                            if (overlayHomeState == OverlayHomeState.EXITING_HOME || overlayHomeState == OverlayHomeState.EXITING_DETAILS || overlayHomeState == OverlayHomeState.EXITING_GUEST_FLEET ) {
                                 delay(200)
                                 overlayHomeState = targetHomeState
                             }
                         }
 
-                        if ( overlayHomeState == OverlayHomeState.IDLE ) {
+                        AnimatedVisibility(
+                            visible = overlayHomeState == OverlayHomeState.IDLE,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(200))
+                        ) {
                             Modal(
                                 onOpenGameModes = { index ->
                                     chosenGameModeIndex = index
@@ -273,13 +391,159 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                         }
 
                         // -- GAME MODE'S DETAILS --
-                        if ( overlayHomeState == OverlayHomeState.SHOWING_DETAILS ) {
+                        AnimatedVisibility(
+                            visible = overlayHomeState == OverlayHomeState.SHOWING_DETAILS,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(200))
+                        ) {
                             GameModeDetailsScreen(
                                 gameModeIndex = chosenGameModeIndex,
                                 onBack = { overlayHomeState = OverlayHomeState.IDLE },
-                                onContinue = { /* [ TO - DO ] */ }
+                                onContinue = { difficulty, rule ->
+                                    chosenDifficulty = difficulty
+                                    chosenFiringRule = rule
+
+                                    // if 0 -> playing match against computer
+                                    // if 1 -> DialogDeployment -> Formation for guest 2
+                                    // if 2 -> Lobby
+                                    when (chosenGameModeIndex) {
+                                        0 -> {
+                                            overlayHomeState = OverlayHomeState.EXITING_DETAILS
+                                            targetHomeState = OverlayHomeState.PLAYING_VS_COMPUTER
+                                        }
+                                        1 -> {
+                                            overlayHomeState = OverlayHomeState.EXITING_DETAILS
+                                            targetHomeState = OverlayHomeState.SHOWING_GUEST_FLEET
+                                        }
+                                        2 -> {
+                                            overlayHomeState = OverlayHomeState.EXITING_DETAILS
+                                            targetHomeState = OverlayHomeState.SHOWING_LOBBY
+                                        }
+                                    }
+
+                                }
                             )
                         }
+
+                        // -- FLEET GUEST --
+                        AnimatedVisibility(
+                            visible = overlayHomeState == OverlayHomeState.SHOWING_GUEST_FLEET,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(200))
+                        ) {
+                            FleetGuestScreen(
+                                firingRule = chosenFiringRule,
+                                onBack = {
+                                    overlayHomeState = OverlayHomeState.SHOWING_DETAILS
+                                },
+                                onStartMatch = { rule ->
+                                    // [ TO - DO ]: Show the DialogTurn regarding the first player that has to move, then the grid must be displayed. Add the remaining parameters ( e.g., the user's data, etc. )
+
+                                    chosenFiringRule = rule
+
+                                    overlayHomeState = OverlayHomeState.EXITING_GUEST_FLEET
+                                    targetHomeState = OverlayHomeState.PLAYING_VS_GUEST
+                                }
+                            )
+                        }
+
+                        // -- LOBBY --
+                        AnimatedVisibility(
+                            visible = overlayHomeState == OverlayHomeState.SHOWING_LOBBY || overlayHomeState == OverlayHomeState.LOADING_MATCH,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(200))
+                        ) {
+                            GameLobbyScreen(
+                                availableFlags = availableFlags,
+                                onBack = {
+                                    overlayHomeState = OverlayHomeState.SHOWING_DETAILS
+                                },
+                                onChosenPlayer = {
+                                    // [ TO - DO ]: Store the information regarding the chosen opponent
+
+                                    overlayHomeState = OverlayHomeState.LOADING_MATCH
+                                }
+                            )
+                        }
+
+                        // -- PLAYING VS COMPUTER --
+                        AnimatedVisibility(
+                            visible = overlayHomeState == OverlayHomeState.PLAYING_VS_COMPUTER,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(200))
+                        ) {
+                            // [ TO - DO ]: Add the remaining parameters, especially the ones related to the player's formation
+                            MatchVsComputerScreen(
+                                difficulty = chosenDifficulty ?: "Normal",
+                                firingRule = chosenFiringRule,
+                                user = entry,
+                                flag = availableFlags.find { it.code == entry?.countryCode },
+                                onRetire = {
+                                    // [ TO - DO ]: The loss must be registered using the profileViewModel
+                                    // e.g., viewModel.update...
+
+                                    overlayHomeState = OverlayHomeState.IDLE
+                                },
+                                onComplete = { isVictory ->
+                                    // [ TO - DO ]: Update the user's statistics regarding the amount of matches he/she played, number of victories or losses ( according to the boolean isVictory ), and so on
+                                    // e.g., viewModel.update...
+
+                                    overlayHomeState = OverlayHomeState.IDLE
+                                }
+                            )
+                        }
+
+                        // -- MATCH VS GUEST --
+                        AnimatedVisibility(
+                            visible = overlayHomeState == OverlayHomeState.PLAYING_VS_GUEST,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(200))
+                        ) {
+                            // ...
+                            MatchVsGuestScreen(
+                                firingRule = chosenFiringRule,
+                                user = entry,
+                                flag = availableFlags.find { it.code == entry?.countryCode },
+                                onRetire = {
+                                    // ...
+
+                                    overlayHomeState = OverlayHomeState.IDLE
+                                },
+                                onComplete = { isPlayer1Winner ->
+                                    // ...
+
+                                    overlayHomeState = OverlayHomeState.IDLE
+                                }
+                            )
+                        }
+
+                        // -- MATCH VS FRIEND --
+                        AnimatedVisibility(
+                            visible = overlayHomeState == OverlayHomeState.PLAYING_VS_FRIEND,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(200))
+                        ) {
+                            // ...
+                            // The below page is analogous to the MatchVsComputer one, except for the fact that the game is provided remotely among the two kiths ( however the inner animations, dimensions, and other graphical stuff are basically the same )
+                            /*
+                                MatchVsFriendScreen(
+                                    firingRule = chosenFiringRule,
+                                    user = entry,
+                                    flag = availableFlags.find { it.code == entry?.countryCode },
+                                    onRetire = {
+                                        // ...
+
+                                        overlayHomeState = OverlayHomeState.IDLE
+                                    },
+                                    onComplete = { isVictory ->
+                                        // ...
+
+                                        overlayHomeState = OverlayHomeState.IDLE
+                                    }
+                                )
+                             */
+                        }
+
                     }
                     NavigationItem.Profile -> {
                         LaunchedEffect(overlayProfileState) {
@@ -291,17 +555,14 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
 
                         ProfileScreen(
                             isVisible = isContentVisible && (overlayProfileState == OverlayProfileState.IDLE),
+                            user = entry,
+                            availableFlags = availableFlags,
                             viewModel = viewModel,
                             onGetPhoto = { uri ->
-                                capturedImageUri = uri
-                                showDialogFilter = true
+                                activeDialog = ActiveDialog.Filter(uri)
                             },
-                            onOpenChangeFlag = {
-                                showDialogFlag = true
-                            },
-                            onOpenChangeName = {
-                                showDialogName = true
-                            },
+                            onOpenChangeFlag = { activeDialog = ActiveDialog.Flag },
+                            onOpenChangeName = { activeDialog = ActiveDialog.Name },
                             onOpenStatistics = {
                                 overlayProfileState = OverlayProfileState.EXITING_PROFILE
                                 targetProfileState = OverlayProfileState.SHOWING_STATS
@@ -310,7 +571,7 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                                 overlayProfileState = OverlayProfileState.EXITING_PROFILE
                                 targetProfileState = OverlayProfileState.SHOWING_RANKINGS
                             },
-                            onOpenFriends = { showDialogFriends = true }
+                            onOpenFriends = { activeDialog = ActiveDialog.Friend }
                         )
 
                         // -- STATISTICS --
@@ -322,10 +583,11 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                         }
 
                         // -- RANKINGS --
-                        if (overlayProfileState == OverlayProfileState.SHOWING_RANKINGS) {
+                        if (overlayProfileState == OverlayProfileState.SHOWING_RANKINGS && entry != null) {
                             RankingsScreen(
                                 user = entry,
                                 availableFlags,
+                                viewModel = viewModel,
                                 onBack = { overlayProfileState = OverlayProfileState.IDLE }
                             )
                         }
@@ -344,7 +606,7 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             enter = slideInVertically(
                                 initialOffsetY = { it },
                                 animationSpec = tween(durationMillis = 0)
-                            ) + fadeIn(animationSpec = tween(0)),
+                            ) + fadeIn(animationSpec = tween(300)),
                             exit = slideOutVertically(
                                 targetOffsetY = { it },
                                 animationSpec = tween(durationMillis = 200)
@@ -370,12 +632,13 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             enter = slideInVertically(
                                 initialOffsetY = { it },
                                 animationSpec = tween(durationMillis = 0)
-                            ) + fadeIn(animationSpec = tween(0)),
+                            ) + fadeIn(animationSpec = tween(300)),
                             exit = slideOutVertically(
                                 targetOffsetY = { it },
                                 animationSpec = tween(durationMillis = 200)
                             ) + fadeOut(animationSpec = tween(200))
                         ) {
+                            // [ TO - DO ]: Set up the configuration using a proper viewModel
                             GameOptionsScreen(
                                 onBack = { overlayMenuState = OverlayMenuState.IDLE }
                             )
@@ -386,7 +649,7 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             enter = slideInVertically(
                                 initialOffsetY = { it },
                                 animationSpec = tween(durationMillis = 0)
-                            ) + fadeIn(animationSpec = tween(0)),
+                            ) + fadeIn(animationSpec = tween(300)),
                             exit = slideOutVertically(
                                 targetOffsetY = { it },
                                 animationSpec = tween(durationMillis = 200)
@@ -395,15 +658,91 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             AccountSettingsScreen(
                                 user = entry,
                                 onBack = { overlayMenuState = OverlayMenuState.IDLE },
-                                onOpenPasswordRecovery = { showDialogPassword = true },
-                                onOpenRegister = { showDialogRegister = true },
-                                onOpenAccess = { showDialogAccess = true },
-                                onOpenDeleteAccount = { showDialogDeleteAccount = true }
+                                onOpenPasswordRecovery = {
+                                    activeDialog = if (!entry?.googleName.isNullOrEmpty()) {
+                                        ActiveDialog.Error("The user has no password to recover.", DialogSource.NONE)
+                                    } else {
+                                        ActiveDialog.Password(entry?.email ?: "")
+                                    }
+                                },
+                                onOpenRegister = { activeDialog = ActiveDialog.Register },
+                                onOpenAccess = { activeDialog = ActiveDialog.Access },
+                                onOpenDeleteAccount = {
+                                    activeDialog = if (entry != null)
+                                        ActiveDialog.DeleteAccount
+                                    else
+                                        ActiveDialog.Error("No active user could be deleted.", DialogSource.ACCESS)
+                                }
                             )
                         }
                     }
-                    NavigationItem.Fleet -> FleetScreen()
-                    NavigationItem.Game -> {}
+                    NavigationItem.Fleet -> {
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = fadeIn(tween(300)),
+                            exit = fadeOut(tween(200))
+                        ) {
+                            FleetScreen(
+                                db = db,
+                                repository = repository
+                            )
+                        }
+                    }
+                    NavigationItem.Game -> {
+                        LaunchedEffect(overlayChallengeState) {
+                            if (overlayChallengeState == OverlayChallengeState.EXITING_CHALLENGE ) {
+                                delay(200)
+                                overlayChallengeState = targetChallengeState
+                            }
+                        }
+
+                        // -- CHALLENGES --
+                        AnimatedVisibility(
+                            visible = overlayChallengeState == OverlayChallengeState.IDLE,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(200))
+                        ) {
+                            ChallengeScreen(
+                                onOpenTorpedo = {
+                                    overlayChallengeState = OverlayChallengeState.EXITING_CHALLENGE
+                                    overlayChallengeState = OverlayChallengeState.SHOWING_TORPEDO
+                                },
+                                onOpenCargo = {
+                                    overlayChallengeState = OverlayChallengeState.EXITING_CHALLENGE
+                                    overlayChallengeState = OverlayChallengeState.SHOWING_CARGO
+                                },
+                                onOpenBilge = {
+                                    overlayChallengeState = OverlayChallengeState.EXITING_CHALLENGE
+                                    overlayChallengeState = OverlayChallengeState.SHOWING_BILGE
+                                }
+                            )
+                        }
+
+                        // -- TORPEDO --
+                        AnimatedVisibility(
+                            visible = overlayChallengeState == OverlayChallengeState.SHOWING_TORPEDO,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(200))
+                        ) {
+                            /*
+                                TorpedoScreen(
+                                    ...,
+                                    onGameResult = { isWin ->
+                                        // [ TO - DO ]: Apply the correct logic to update the user's statistics
+
+                                        overlayChallengeState = OverlayChallengeState.IDLE
+                                    }
+                                )
+                            */
+                        }
+
+                        // -- CARGO --
+                        // [ TO - DO ]: Same as "Torpedo", except for the amount of cooldown, exp., and so on
+
+                        // -- BILGE --
+                        // ...
+
+                    }
                 }
             }
         }
@@ -446,7 +785,7 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                         verticalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = "Hello, ${entry.googleName}",
+                            text = "Hello, ${entry.googleName.ifEmpty { entry.name }}",
                             color = Color.Black,
                             fontFamily = FontFamily.SansSerif,
                             fontWeight = FontWeight.Medium,
@@ -497,49 +836,147 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
     }
 
     // -- DIALOGS --
-    // -- ProfileScreen --
-    if (showDialogFilter && capturedImageUri != null) {
-        DialogFilter(
-            imageUri = capturedImageUri!!,
-            onDismiss = { showDialogFilter = false },
-            onConfirm = { bitmap ->
-                viewModel.updateProfilePicture(context, bitmap)
-                showDialogFilter = false
-            }
-        )
-    }
+    when (val currentDialog = activeDialog) {
+        is ActiveDialog.None -> {}
 
-    if (showDialogFlag) {
-        DialogFlag(
-            availableFlags = availableFlags,
-            currentCode = entry?.countryCode ?: "IT",
-            onDismiss = { showDialogFlag = false },
-            onConfirm = { flag ->
-                viewModel.updateCountry(flag.code)
-                showDialogFlag = false
-            }
-        )
-    }
+        // -- PROFILE DIALOGS --
+        is ActiveDialog.Filter -> {
+            DialogFilter(
+                imageUri = currentDialog.uri,
+                onDismiss = { activeDialog = ActiveDialog.None },
+                onConfirm = { bitmap ->
+                    viewModel.updateProfilePicture(context, bitmap)
+                    activeDialog = ActiveDialog.None
+                }
+            )
+        }
 
-    if (showDialogName) {
-        DialogName(
-            currentName = entry?.name ?: "Sailor",
-            onDismiss = { showDialogName = false },
-            onConfirm = { newName ->
-                viewModel.updateName(newName)
-                showDialogName = false
-            }
-        )
-    }
+        is ActiveDialog.Flag -> {
+            DialogFlag(
+                availableFlags = availableFlags,
+                currentCode = entry?.countryCode ?: "IT",
+                onDismiss = { activeDialog = ActiveDialog.None },
+                onConfirm = { flag ->
+                    viewModel.updateCountry(flag.code)
+                    activeDialog = ActiveDialog.None
+                }
+            )
+        }
 
-    if (showDialogFriends) {
-        DialogFriend(
-            onDismiss = { showDialogFriends = false },
-            onConfirm = { friendId ->
-                // [ TO - DO ]: Implement the logic through which it is possible to add a new friend having the specified ID for the current user
-                showDialogFriends = false
+        is ActiveDialog.Name -> {
+            DialogName(
+                currentName = entry?.name ?: "Sailor",
+                onDismiss = { activeDialog = ActiveDialog.None },
+                onConfirm = { newName ->
+                    viewModel.updateName(newName)
+                    activeDialog = ActiveDialog.None
+                }
+            )
+        }
+
+        is ActiveDialog.Friend -> {
+            DialogFriend(
+                onDismiss = { activeDialog = ActiveDialog.None },
+                onConfirm = { friendId ->
+                    viewModel.sendFriendRequest(friendId) { success, message ->
+                        if (!success) {
+                            activeDialog = ActiveDialog.Error(message, DialogSource.FRIEND)
+                        }
+                    }
+                }
+            )
+        }
+
+        // -- ACCOUNT DIALOGS --
+        is ActiveDialog.Register -> {
+            DialogRegister(
+                onDismiss = { activeDialog = ActiveDialog.None; registerViewModel.resetState() },
+                onConfirm = { email, password, confirmPassword ->
+                    registerViewModel.register(email, password, confirmPassword)
+                }
+            )
+        }
+
+        is ActiveDialog.Access -> {
+            val isLoading = uiStateAS is RegisterUiState.Loading
+            
+            DialogAccess(
+                onDismiss = { activeDialog = ActiveDialog.None; registerViewModel.resetState() },
+                onConfirm = { email, password -> registerViewModel.login(email, password) },
+                isLoading = isLoading
+            )
+        }
+
+        is ActiveDialog.Password -> {
+            DialogPassword(
+                email = currentDialog.emailToPrefill,
+                onDismiss = { activeDialog = ActiveDialog.None },
+                onConfirm = { email ->
+                    profileViewModel.resetPassword(email) { success, message ->
+                        activeDialog = if (!success) {
+                            ActiveDialog.Error(message, DialogSource.PASSWORD)
+                        } else {
+                            ActiveDialog.None
+                        }
+                    }
+                }
+            )
+        }
+
+        is ActiveDialog.DeleteAccount -> {
+            if (entry != null) {
+                DialogDeleteAccount(
+                    onDismiss = { activeDialog = ActiveDialog.None },
+                    onConfirm = {
+                        profileViewModel.deleteAccount(entry) { success ->
+                            if (success) {
+                                activeDialog = ActiveDialog.None
+                                coroutineScope.launch {
+                                    try {
+                                        val credentialManager = CredentialManager.create(context)
+                                        credentialManager.clearCredentialState(
+                                            ClearCredentialStateRequest()
+                                        )
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    } finally {
+                                        onRestart()
+                                    }
+                                }
+                            } else {
+                                activeDialog = ActiveDialog.Error(
+                                    "Failed to delete the account.",
+                                    DialogSource.DELETE
+                                )
+                            }
+                        }
+                    }
+                )
             }
-        )
+        }
+
+        // -- SYSTEM / ERROR DIALOGS --
+        is ActiveDialog.Error -> {
+            DialogError(
+                errorMessage = currentDialog.message,
+                onDismiss = {
+                    activeDialog = when (currentDialog.source) {
+                        DialogSource.REGISTER -> {
+                            registerViewModel.resetState(); ActiveDialog.Register
+                        }
+
+                        DialogSource.ACCESS -> {
+                            registerViewModel.resetState(); ActiveDialog.Access
+                        }
+
+                        DialogSource.PASSWORD -> ActiveDialog.None
+                        DialogSource.DELETE -> ActiveDialog.None
+                        DialogSource.FRIEND -> ActiveDialog.Friend
+                        else -> ActiveDialog.None
+                    }
+                }
+            )
+        }
     }
 
     // -- MenuScreen --
@@ -549,592 +986,19 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
         )
     }
 
-    // -- AccountSettingsScreen --
-    if (showDialogPassword) {
-        DialogPassword(
-            onDismiss = { showDialogPassword = false },
-            onConfirm = { email ->
-                showDialogPassword = false
+    // -- GameLobbyScreen --
+    if (overlayHomeState == OverlayHomeState.LOADING_MATCH) {
+        DialogLoading(
+            onDismiss = {
+                // [ TO - DO ]: Cancel the match request
 
-                // [ TO - DO ]: Verify using the ViewModel ( DB, etc. ) whether the email address used for registering the account matches, and, only in that case, send the password through that reference.
-                // e.g. the following check may be applied
-                if (!email.contains("@")) {
-                    // errorMessage = "E-mail not found."
-                    showDialogError = true
-                }
+                overlayHomeState = OverlayHomeState.SHOWING_LOBBY
             }
         )
-    }
 
-    if (showDialogRegister) {
-        DialogRegister(
-            onDismiss = { showDialogRegister = false },
-            onConfirm = { email, password ->
-                // [ TO - DO ]: ...
-                showDialogRegister = false
-            }
-        )
-    }
-
-    if (showDialogAccess) {
-        DialogAccess(
-            onDismiss = { showDialogAccess = false },
-            onConfirm = { email, password ->
-                // [ TO - DO ]: ...
-                showDialogAccess = false
-            }
-        )
-    }
-
-    if (showDialogDeleteAccount) {
-        DialogDeleteAccount(
-            onDismiss = { showDialogDeleteAccount = false },
-            onConfirm = {
-                // [ TO - DO ]: ...
-                showDialogDeleteAccount = false
-            }
-        )
-    }
-
-    // -- DialogError --
-    if (showDialogError) {
-        DialogError(
-            errorMessage = errorMessage,
-            onDismiss = { showDialogError = false }
-        )
-    }
-
-}
-
-private val CELL_SIZE = 40.dp
-private const val GRID_SIZE = 8
-private val GRID_BORDER_COLOR = Color(0xFF4A90E2)
-private val GRID_BG_COLOR = Color(0xFF1A3A4A).copy(alpha = 0.5f)
-private val SHIP_COLOR = Color(0xFF8899A6)
-private val PREVIEW_OK = Color(0xFF32CD32)
-private val PREVIEW_BAD = Color(0xFFFF0000)
-
-private val SHIP_ICONS = mapOf(
-    5 to "🚢",
-    4 to "🛳️",
-    3 to "🛥️",
-    2 to "⛵",
-    1 to "🚤"
-)
-private const val DEFAULT_SHIP_ICON = "❓"
-
-private data class DragState(
-    val isDragging: Boolean = false,
-    val draggedShipSize: Int = 0,
-    val currentDragOffset: Offset = Offset.Zero
-)
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun FleetScreen() {
-
-    // Fetch local database and remote API service
-    val context = LocalContext.current
-    val db = AppDatabase.getDatabase(context)
-    val apiService = RetrofitClient.api
-
-    // Initialize the ViewModel with its Factory
-    val viewModel: FleetViewModel = viewModel(
-        factory = FleetViewModelFactory(
-            u = db.userDao(),
-            f = db.fleetDao(),
-            r = UserRepository(
-                api = apiService,
-                userDao = db.userDao(),
-                fleetDao = db.fleetDao()
-            )
-        )
-    )
-
-    val state by viewModel.state.collectAsState()
-    val density = LocalDensity.current
-    val snackBarHostState = remember { SnackbarHostState() }
-
-    // Listen for UI events from the ViewModel
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { ev ->
-            when (ev) {
-                // Silently handle message events without showing a UI component
-                is FleetUiEvent.Message -> {
-                    /* No message displayed */
-                }
-
-                // Silently handle successful save and sync
-                is FleetUiEvent.SaveSuccess -> {
-                    /* No snackBar displayed as requested */
-                }
-            }
-        }
-    }
-
-    // Drag state (ghost ship + current finger position)
-    var dragState by remember { mutableStateOf(DragState()) }
-
-    // Board metrics used for coordinate conversion
-    var boardOffset by remember { mutableStateOf(Offset.Unspecified) }
-    var boardCellPx by remember { mutableStateOf(0f) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
-        ) {
-            Text(
-                text = "FLEET FORMATION",
-                color = Color.White,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 24.dp)
-            )
-
-            // --- BATTLE GRID ---
-            Box(
-                modifier = Modifier
-                    .border(2.dp, GRID_BORDER_COLOR, RoundedCornerShape(8.dp))
-                    .background(GRID_BG_COLOR, RoundedCornerShape(8.dp))
-                    .graphicsLayer { clip = true; shape = RoundedCornerShape(8.dp) }
-                    .padding(4.dp)
-            ) {
-                // Inner box: this is the TRUE origin of the cells (0,0).
-                Box(
-                    modifier = Modifier.onGloballyPositioned { coordinates ->
-                        boardOffset = coordinates.positionInWindow()
-                        boardCellPx = with(density) { CELL_SIZE.toPx() }
-                    }
-                ) {
-                    // Layer 1: Placement preview overlay (green/red validation)
-                    Column {
-                        for (row in 0 until GRID_SIZE) {
-                            Row {
-                                for (col in 0 until GRID_SIZE) {
-                                    val preview = state.placementPreview
-                                    val isPreviewCell = preview?.coordinates?.contains(row to col) == true
-                                    val isPreviewValid = preview?.isValid == true
-
-                                    val color = when {
-                                        isPreviewCell && isPreviewValid -> PREVIEW_OK.copy(alpha = 0.6f)
-                                        isPreviewCell && !isPreviewValid -> PREVIEW_BAD.copy(alpha = 0.6f)
-                                        else -> Color.Transparent
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(CELL_SIZE)
-                                            .border(0.5.dp, Color.White.copy(alpha = 0.1f))
-                                            .background(color)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Layer 2: Already placed ships
-                    Box(Modifier.matchParentSize()) {
-                        state.placedShips.forEach { ship ->
-                            ShipDrawing(ship, CELL_SIZE)
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            // --- CONTROLS SECTION ---
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                // 1. ROTATE ACTION
-                Button(
-                    onClick = { viewModel.onRotate() },
-                    enabled = !state.isSaved,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(0.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Text("ROT", fontSize = 10.sp, maxLines = 1)
-                    }
-                }
-
-                // 2. AUTO-PLACE ACTION
-                Button(
-                    onClick = { viewModel.autoPlaceFleet() },
-                    enabled = !state.isSaved,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(0.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🎲", fontSize = 18.sp)
-                        Text("AUTO", fontSize = 10.sp, maxLines = 1)
-                    }
-                }
-
-                // 3. RESET ACTION
-                Button(
-                    onClick = { viewModel.onReset() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(0.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🗑️", fontSize = 16.sp)
-                        Text("RESET", fontSize = 10.sp, maxLines = 1)
-                    }
-                }
-
-                // 4. SAVE & SYNC ACTION
-                Button(
-                    onClick = { viewModel.saveFleetToDb() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                    enabled = state.shipsToPlace.isEmpty() && !state.isSaved,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(0.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Text(if (state.isSaved) "OK" else "SAVE", fontSize = 10.sp, maxLines = 1)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(40.dp))
-
-            // --- SHIP DOCK / STATUS BANNER ---
-            if (state.isSaved) {
-                // Displayed when the fleet configuration is successfully saved and synced
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .background(Color(0xFF1B5E20).copy(alpha = 0.8f), RoundedCornerShape(12.dp))
-                        .border(1.dp, Color.Green, RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "FLEET READY",
-                            color = Color.White,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 2.sp
-                        )
-                        Text(
-                            text = "AWAITING ORDERS",
-                            color = Color.LightGray,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            } else {
-                if (state.shipsToPlace.isNotEmpty()) {
-                    Text("Drag ships to grid:", color = Color.Gray)
-                    Spacer(Modifier.height(12.dp))
-
-                    val groupedShips =
-                        state.shipsToPlace.groupingBy { it }.eachCount().toSortedMap(reverseOrder())
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp)
-                            .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                            .horizontalScroll(rememberScrollState())
-                            .padding(16.dp)
-                            .zIndex(1f),
-                        horizontalArrangement = Arrangement.spacedBy(20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        groupedShips.keys.toList().forEach { size ->
-                            val count = groupedShips[size] ?: 0
-
-                            ExactDraggableShipItem(
-                                size = size,
-                                count = count,
-                                boardOffset = boardOffset,
-                                boardCellPx = boardCellPx,
-                                onDragStart = {
-                                    viewModel.onDragStart(size)
-                                    dragState = dragState.copy(isDragging = true, draggedShipSize = size)
-                                },
-                                onDragOffsetUpdate = { offset ->
-                                    dragState = dragState.copy(currentDragOffset = offset)
-                                },
-                                onDragCell = { r, c ->
-                                    viewModel.onDragHover(r, c, size)
-                                },
-                                onDragExit = { viewModel.onDragEnd() },
-                                onDragEnd = {
-                                    viewModel.onDragEnd()
-                                    dragState = dragState.copy(isDragging = false)
-                                },
-                                onDragFinished = {
-                                    viewModel.onDragEnd()
-                                    dragState = dragState.copy(isDragging = false)
-                                },
-                                onDrop = { r, c ->
-                                    viewModel.onDropShip(r, c, size)
-                                    viewModel.onDragEnd()
-                                    dragState = dragState.copy(isDragging = false)
-                                }
-                            )
-                        }
-                    }
-                } else {
-                    // Ready to save state
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(80.dp)
-                            .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(12.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "FORMATION COMPLETE\nPRESS SAVE",
-                            color = Color(0xFF69F0AE),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-        }
-
-        // --- GHOST SHIP OVERLAY (DRAGGING) ---
-        if (dragState.isDragging &&
-            dragState.draggedShipSize > 0 &&
-            dragState.currentDragOffset != Offset.Zero
-        ) {
-            val size = dragState.draggedShipSize
-            val offsetPx = dragState.currentDragOffset
-            val isHorizontal = state.currentOrientation == ShipOrientation.HORIZONTAL
-
-            val (w, h) = with(density) {
-                if (isHorizontal) (CELL_SIZE * size).toPx() to CELL_SIZE.toPx()
-                else CELL_SIZE.toPx() to (CELL_SIZE * size).toPx()
-            }
-
-            val xOffset = offsetPx.x - (w / 2f)
-            val yOffset = offsetPx.y - (h / 2f)
-
-            Box(
-                modifier = Modifier
-                    .offset { IntOffset(xOffset.roundToInt(), yOffset.roundToInt()) }
-                    .size(width = with(density) { w.toDp() }, height = with(density) { h.toDp() })
-                    .zIndex(100f)
-                    .graphicsLayer(alpha = 0.9f)
-            ) {
-                if (isHorizontal) {
-                    Row(Modifier.fillMaxSize()) {
-                        repeat(size) {
-                            Box(
-                                Modifier.weight(1f).fillMaxHeight()
-                                    .background(SHIP_COLOR, RectangleShape)
-                                    .border(1.dp, if (state.placementPreview?.isValid == true) Color.Green else Color.Red, RectangleShape)
-                            )
-                        }
-                    }
-                } else {
-                    Column(Modifier.fillMaxSize()) {
-                        repeat(size) {
-                            Box(
-                                Modifier.weight(1f).fillMaxWidth()
-                                    .background(SHIP_COLOR, RectangleShape)
-                                    .border(1.dp, if (state.placementPreview?.isValid == true) Color.Green else Color.Red, RectangleShape)
-                            )
-                        }
-                    }
-                }
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = SHIP_ICONS[size] ?: DEFAULT_SHIP_ICON, fontSize = 24.sp)
-                }
-            }
-        }
-
-        SnackbarHost(
-            hostState = snackBarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
-    }
-}
-
-// --- DRAGGABLE ITEM COMPONENT ---
-@Composable
-fun ExactDraggableShipItem(
-    size: Int,
-    count: Int,
-    boardOffset: Offset,
-    boardCellPx: Float,
-    onDragStart: () -> Unit,
-    onDragOffsetUpdate: (Offset) -> Unit,
-    onDragCell: (Int, Int) -> Unit,
-    onDragExit: () -> Unit,
-    onDragEnd: () -> Unit,
-    onDragFinished: () -> Unit,
-    onDrop: (Int, Int) -> Unit
-) {
-    var originInWindow by remember { mutableStateOf(Offset.Unspecified) }
-    var currentPointerLocalOffset by remember { mutableStateOf(Offset.Zero) }
-    var lastCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier
-                .onGloballyPositioned { originInWindow = it.positionInWindow() }
-                .pointerInput(size) {
-                    detectDragGestures(
-                        onDragStart = { pointerOffset ->
-                            currentPointerLocalOffset = pointerOffset
-                            onDragStart()
-                            onDragOffsetUpdate(originInWindow + currentPointerLocalOffset)
-
-                            if (boardOffset != Offset.Unspecified && boardCellPx > 0f) {
-                                val fingerAbsX = originInWindow.x + currentPointerLocalOffset.x
-                                val fingerAbsY = originInWindow.y + currentPointerLocalOffset.y
-                                val relX = fingerAbsX - boardOffset.x
-                                val relY = fingerAbsY - boardOffset.y
-                                val boardSizePx = boardCellPx * GRID_SIZE
-
-                                if (relX in 0f..boardSizePx && relY in 0f..boardSizePx) {
-                                    val c = (relX / boardCellPx).toInt().coerceIn(0, GRID_SIZE - 1)
-                                    val r = (relY / boardCellPx).toInt().coerceIn(0, GRID_SIZE - 1)
-                                    lastCell = r to c
-                                    onDragCell(r, c)
-                                } else {
-                                    lastCell = null
-                                    onDragExit()
-                                }
-                            }
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            currentPointerLocalOffset += dragAmount
-                            onDragOffsetUpdate(originInWindow + currentPointerLocalOffset)
-
-                            if (boardOffset != Offset.Unspecified && boardCellPx > 0f) {
-                                val fingerAbsX = originInWindow.x + currentPointerLocalOffset.x
-                                val fingerAbsY = originInWindow.y + currentPointerLocalOffset.y
-                                val relX = fingerAbsX - boardOffset.x
-                                val relY = fingerAbsY - boardOffset.y
-                                val boardSizePx = boardCellPx * GRID_SIZE
-
-                                if (relX in 0f..boardSizePx && relY in 0f..boardSizePx) {
-                                    val c = (relX / boardCellPx).toInt().coerceIn(0, GRID_SIZE - 1)
-                                    val r = (relY / boardCellPx).toInt().coerceIn(0, GRID_SIZE - 1)
-
-                                    if (lastCell != (r to c)) {
-                                        lastCell = r to c
-                                        onDragCell(r, c)
-                                    }
-                                } else if (lastCell != null) {
-                                    lastCell = null
-                                    onDragExit()
-                                }
-                            }
-                        },
-                        onDragEnd = {
-                            lastCell?.let { (r, c) -> onDrop(r, c) } ?: run { onDragExit() }
-                            lastCell = null
-                            onDragFinished()
-                            onDragEnd()
-                        },
-                        onDragCancel = {
-                            lastCell = null
-                            onDragExit()
-                            onDragFinished()
-                        }
-                    )
-                }
-                .size(CELL_SIZE * size, CELL_SIZE),
-            contentAlignment = Alignment.Center
-        ) {
-            // LAYER 1: The Squares (Horizontal orientation in dock)
-            Row(modifier = Modifier.fillMaxSize()) {
-                repeat(size) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .background(SHIP_COLOR, RectangleShape)
-                            .border(1.dp, Color.White.copy(alpha = 0.3f), RectangleShape)
-                    )
-                }
-            }
-            // LAYER 2: Ship Emoji
-            Text(text = SHIP_ICONS[size] ?: DEFAULT_SHIP_ICON, fontSize = 24.sp)
-        }
-
-        Text("x$count", color = Color.White, fontWeight = FontWeight.Bold)
-    }
-}
-
-// --- RENDERED SHIP COMPONENT ---
-@Composable
-fun ShipDrawing(ship: FleetPlacedShip, cellSize: Dp) {
-    val isHorizontal = ship.isHorizontal
-    val width = if (isHorizontal) cellSize * ship.size else cellSize
-    val height = if (isHorizontal) cellSize else cellSize * ship.size
-
-    Box(
-        modifier = Modifier
-            .offset(x = cellSize * ship.col, y = cellSize * ship.row)
-            .size(width, height)
-    ) {
-        // LAYER 1: SQUARES (Visual representation of ship segments)
-        if (isHorizontal) {
-            Row(modifier = Modifier.fillMaxSize()) {
-                repeat(ship.size) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .background(SHIP_COLOR, RectangleShape)
-                            .border(1.dp, Color.White.copy(alpha = 0.3f), RectangleShape)
-                    )
-                }
-            }
-        } else {
-            Column(modifier = Modifier.fillMaxSize()) {
-                repeat(ship.size) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .background(SHIP_COLOR, RectangleShape)
-                            .border(1.dp, Color.White.copy(alpha = 0.3f), RectangleShape)
-                    )
-                }
-            }
-        }
-
-        // LAYER 2: SHIP ICON (Centered over the segments)
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = SHIP_ICONS[ship.size] ?: DEFAULT_SHIP_ICON,
-                fontSize = 24.sp
-            )
+        LaunchedEffect(Unit) {
+            delay(4500) // [ TO - DO ]: Change this value in order to wait until the match can be started ( min. 4500L * 2 as the Intro.kt radar )
+            overlayHomeState = OverlayHomeState.PLAYING_VS_FRIEND
         }
     }
 }

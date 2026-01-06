@@ -31,21 +31,21 @@ class GoogleSigningUseCase(
     private val userDao: UserDao,
     private val webClientId: String
 ) {
-    // Instance for Realtime Database (Matches your rules configuration)
+    // Instance for Realtime Database
     private val database = FirebaseDatabase.getInstance()
 
     /**
      * @param context Android Context
-     * @param onlySilentLogin If TRUE (Home Screen), it forces a call to Google to trigger the "Welcome Back" popup,
-     * skipping the local DB check. If silent login fails, it returns Cancelled without opening UI.
-     * If FALSE (Login Screen), it performs standard login (Local DB -> Silent -> Interactive).
+     * @param onlySilentLogin
+     * - If TRUE (Home Screen): Tries to silently log in to show the "Welcome Back" pill.
+     * - If FALSE (Login Screen): Forces the interactive account picker.
      */
     suspend operator fun invoke(context: Context, onlySilentLogin: Boolean = false): SigningResult = withContext(Dispatchers.IO) {
         val credentialManager = CredentialManager.create(context)
 
         try {
-            // 1. Check if user is already logged in locally
-            // We SKIP this check if 'onlySilentLogin' is TRUE because we want to force the Google system popup.
+            // 1. LOCAL CHECK
+            // If a user is already in the local DB, use it without calling Google.
             if (!onlySilentLogin) {
                 val user = userDao.getCurrentUser()
                 if (user != null) {
@@ -54,37 +54,29 @@ class GoogleSigningUseCase(
                 }
             }
 
-            // 2. Attempt Silent Login first (This triggers the "Welcome Back" pill)
-            val result = try {
-                val silentOption = setOption(
-                    webClientId,
-                    filterAuthorized = true,
-                    autoSelect = true
-                )
+            // 2. PREPARE OPTIONS
+            // Determine whether to attempt silent login or go straight to the picker.
 
-                val silentRequest = GetCredentialRequest.Builder()
-                    .addCredentialOption(silentOption)
-                    .build()
-
-                credentialManager.getCredential(
-                    request = silentRequest,
-                    context = context
-                )
-            } catch (e: NoCredentialException) {
-                // If silent login fails:
-
-                // CASE A: Home Screen (onlySilentLogin = true)
-                // We do NOT want to interrupt the user with a login sheet. Just stop here.
-                if (onlySilentLogin) {
+            val result = if (onlySilentLogin) {
+                // CASE A: Home Screen (Silent Check)
+                // Attempt to retrieve credentials silently.
+                try {
+                    val silentOption = setOption(webClientId, filterAuthorized = true, autoSelect = true)
+                    val silentRequest = GetCredentialRequest.Builder().addCredentialOption(silentOption).build()
+                    credentialManager.getCredential(request = silentRequest, context = context)
+                } catch (e: NoCredentialException) {
+                    // Silent login failed, do nothing on the home screen.
                     return@withContext SigningResult.Cancelled
                 }
+            } else {
+                // CASE B: Login Screen (Explicit)
+                // We SKIP the silent login attempt here because we want to allow account switching.
+                // We go straight to the interactive request with filterAuthorized = FALSE.
 
-                // CASE B: Login Screen
-                // Fallback to Interactive Login (Bottom Sheet)
                 val interactiveOption = setOption(
                     webClientId,
-                    filterAuthorized = false,
-                    autoSelect = false
+                    filterAuthorized = false, // CRITICAL: Shows all Google accounts on the device
+                    autoSelect = false        // CRITICAL: Forces the selection popup, disables auto-login
                 )
 
                 val interactiveRequest = GetCredentialRequest.Builder()
@@ -99,7 +91,7 @@ class GoogleSigningUseCase(
 
             val credential = result.credential
 
-            // 3. Credential Handling (Parsing Data)
+            // 3. CREDENTIAL PARSING
             var gToken = ""
             var gEmail = ""
             var gName = "Sailor"
@@ -126,14 +118,12 @@ class GoogleSigningUseCase(
                 return@withContext SigningResult.Error("Credential type not recognized.")
             }
 
-            // 4. Realtime Session Management (Firebase Realtime Database)
+            // 4. REALTIME DATABASE SESSION
             val currentSessionToken = UUID.randomUUID().toString()
 
-            // Prepare Google ID to be used as a Key
+            // Prepare Google ID to be used as a Key (emails cannot be keys directly)
             var googleId = getIDFromToken(gToken)
             if (googleId.isEmpty()) {
-                // Realtime Database paths MUST NOT contain '.', '#', '$', '[', or ']'
-                // Since emails contain '.', we replace them with '_' if we use email as ID
                 googleId = gEmail.replace(".", "_")
             }
 
@@ -141,22 +131,21 @@ class GoogleSigningUseCase(
                 val userData = hashMapOf(
                     "name" to gName,
                     "email" to gEmail,
-                    "sessionToken" to currentSessionToken, // The critical token for concurrency check
+                    "sessionToken" to currentSessionToken,
                     "lastLogin" to System.currentTimeMillis()
                 )
 
-                // Write to Realtime Database
-                // We use 'updateChildren' instead of 'setValue' to merge data and avoid deleting existing fields (like 'score')
+                // Write/Merge to Realtime Database
                 database.getReference("users")
                     .child(googleId)
                     .updateChildren(userData as Map<String, Any>)
                     .await()
 
             } catch (e: Exception) {
-                Log.e("GoogleSigning", "Firebase Realtime DB write failed: ${e.message}")
+                Log.e("GoogleSigning", "Firebase DB write failed: ${e.message}")
             }
 
-            // 5. Finalize Local Login
+            // 5. FINALIZE LOCAL LOGIN
             return@withContext handleSuccess(
                 userId = googleId,
                 email = gEmail,
@@ -167,7 +156,7 @@ class GoogleSigningUseCase(
             )
 
         } catch (e: GetCredentialCancellationException) {
-            Log.d("SigningUseCase", "Login cancelled.")
+            Log.d("SigningUseCase", "Login cancelled by user.")
             return@withContext SigningResult.Cancelled
         } catch (e: Exception) {
             Log.e("SigningUseCase", "Login error: ${e.message}")
@@ -175,7 +164,7 @@ class GoogleSigningUseCase(
         }
     }
 
-    // Helper function to handle Split Identity & Local Persistence
+    // Helper to merge Google Identity with Local Persistence
     private suspend fun handleSuccess(
         userId: String,
         email: String,
@@ -185,26 +174,18 @@ class GoogleSigningUseCase(
         context: Context
     ): SigningResult {
 
-        // Check if user exists in local Room DB
         val existingUser = userDao.getUserById(userId)
-
         val safeGooglePhotoUrl = if (googlePhotoUrl.isNullOrEmpty()) "ic_terms" else googlePhotoUrl
 
         val userToReturn = if (existingUser != null) {
-            // --- EXISTING USER ---
-            // Keep custom 'name' and 'profilePictureUrl' (Game Identity).
-            // Update 'google...' fields (Backup Identity).
-            // Update 'sessionToken' (Security).
+            // Update existing user with new Google info and session token
             existingUser.copy(
                 googleName = googleDisplayName,
                 googlePhotoUrl = safeGooglePhotoUrl,
                 sessionToken = sessionToken
             )
         } else {
-            // --- NEW USER ---
-            // Initialize Game Identity with Google Data.
-            // Save Google Data as Backup.
-            // Save Session Token.
+            // Create new user structure
             User(
                 id = userId,
                 email = email,
@@ -253,8 +234,6 @@ class GoogleSigningUseCase(
                     .build()
 
                 context.imageLoader.execute(imgRequest)
-
-                Log.d("GoogleSigning", "Operation done successfully: $url")
             } catch (e: Exception) {
                 Log.e("GoogleSigning", "Failed to preload image: ${e.message}")
             }

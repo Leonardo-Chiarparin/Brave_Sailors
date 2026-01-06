@@ -41,7 +41,7 @@ val gameModes = listOf(
         opponent = OpponentType.Computer
     ),
     Mode(
-        title = "Player 1 vs. Player 2",
+        title = "Player 1 vs. player 2",
         sub = "on one device",
         button = "Start game",
         opponent = OpponentType.Human

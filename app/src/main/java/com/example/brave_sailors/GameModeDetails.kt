@@ -57,7 +57,9 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import com.example.brave_sailors.ui.components.BackButton
 import com.example.brave_sailors.ui.components.ContinueButton
+import com.example.brave_sailors.ui.components.DialogDeployment
 import com.example.brave_sailors.ui.components.DialogDifficulty
+import com.example.brave_sailors.ui.components.DialogError
 import com.example.brave_sailors.ui.components.DialogFiringRules
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
@@ -68,25 +70,16 @@ import kotlinx.coroutines.launch
 fun GameModeDetailsScreen(
     gameModeIndex: Int, // 0 = Single player vs. computer
     onBack: () -> Unit,
-    onContinue: () -> Unit
+    onContinue: (String?, String) -> Unit // difficulty ( it is relevant for option 0 ) and firing rule
 ) {
-    var isVisible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        isVisible = false
-        delay(200)
-        isVisible = true
-    }
-
-    if (isVisible)
-        Modal(gameModeIndex, onBack, onContinue)
+    Modal(gameModeIndex, onBack, onContinue)
 }
 
 @Composable
 private fun Modal(
     gameModeIndex: Int,
     onBack: () -> Unit,
-    onContinue: () -> Unit
+    onContinue: (String?, String) -> Unit
 ) {
     val scale = RememberScaleConversion()
     val maxWidth = scale.dp(720f)
@@ -102,6 +95,10 @@ private fun Modal(
 
     var showDialogDifficulty by remember { mutableStateOf(false) }
     var showDialogFiringRules by remember { mutableStateOf(false) }
+
+    var showDialogErrorVsComputer by remember { mutableStateOf(false) }
+    var showDialogErrorVsPlayer2 by remember { mutableStateOf(false) }
+    var showDialogErrorVsKith by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         buttonsVisible = true
@@ -215,16 +212,55 @@ private fun Modal(
                         enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
                         exit = slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(200)) + fadeOut(animationSpec = tween(200))
                     ) {
-                        ContinueButton(
-                            text = "Continue",
-                            onClick = {  }
-                        )
+                        when (gameModeIndex) {
+                            0 -> {
+                                ContinueButton(
+                                    text = "Continue",
+                                    onClick = {
+                                        // [ TO - DO ]: If the user has not a formation, then it must be triggered a DialogError with the message "Armada could not be found."
+                                        // if (!fleet.isNullOrEmpty)
+                                            onContinue(difficulty, firingRule) // go to the next page, which requires parameters as difficulty, firingRules, and so on to prepare the match and update its state ( the grid, the result, etc. )... [ NOTE ]: Take a look at HomeScreen
+                                        // else
+                                        //  showDialogErrorVsComputer = true
+                                    }
+                                )
+                            }
+                            1 -> {
+                                ContinueButton(
+                                    text = "Continue",
+                                    onClick = {
+                                        // [ TO - DO ]: If the user (which coincides with the Player 1 in this case ) has not a formation, then it must be triggered a DialogError with the message "Player 1's armada could not be found. Configure it on the dedicated view to allow the opposing user to proceed."
+                                        // e.g.
+                                        // if (!fleet.isNullOrEmpty)
+                                            onContinue(null, firingRule)
+                                        // else
+                                        //  showDialogErrorVsPlayer2 = true
+                                    }
+                                )
+                            }
+                            2 -> {
+                                ContinueButton(
+                                    text = "Continue",
+                                    onClick = {
+                                        // [ TO - DO ]: If the user (which coincides with the Player 1 in this case ) has not a formation, then it must be triggered a DialogError with the message "Armada could not be found."
+                                        // e.g.
+                                        // if (!fleet.isNullOrEmpty)
+                                            onContinue(null, firingRule)
+                                        //  go to the next page, which requires parameters as difficulty, firingRules, ProfileViewModel, and so on to prepare the match and update its state ( the grid, the result, etc. )...
+                                        // else
+                                        //  showDialogErrorVsKith = true
+                                    }
+                                )
+                            }
+                            else -> {}
+                        }
                     }
                 }
             }
         }
 
         // -- DIALOGS --
+        // -- Options --
         if (showDialogDifficulty) {
             DialogDifficulty(
                 currentDifficulty = difficulty,
@@ -246,6 +282,28 @@ private fun Modal(
 
                     showDialogFiringRules = false
                 }
+            )
+        }
+
+        // -- Errors --
+        if (showDialogErrorVsComputer) {
+            DialogError(
+                errorMessage = "Armada could not be found.",
+                onDismiss = { showDialogErrorVsComputer = false }
+            )
+        }
+
+        if (showDialogErrorVsPlayer2) {
+            DialogError(
+                errorMessage = "Player 1's armada could not be found. Configure it on the dedicated view to allow the opposing user to proceed.",
+                onDismiss = { showDialogErrorVsPlayer2 = false }
+            )
+        }
+
+        if (showDialogErrorVsKith) {
+            DialogError(
+                errorMessage = "Armada could not be found.",
+                onDismiss = { showDialogErrorVsKith = false }
             )
         }
     }

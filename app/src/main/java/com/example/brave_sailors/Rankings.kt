@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +28,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,25 +53,29 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.data.remote.api.Flag
+import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.theme.DarkBlue
 import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.TransparentGrey
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
-data class RankingPlayer(
-    val rank: Int,
-    val name: String,
-    val score: String,
-    val countryCode: String, // es. "IT", "US"
-    val avatarUrl: String?
-)
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RankingsScreen(
     user: User?,
     availableFlags: List<Flag>,
+    viewModel: ProfileViewModel,
+    onBack: () -> Unit
+) {
+    Modal(user, availableFlags, viewModel, onBack)
+}
+
+@Composable
+private fun Modal(
+    user: User?,
+    availableFlags: List<Flag>,
+    viewModel: ProfileViewModel,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -78,6 +84,8 @@ fun RankingsScreen(
     val maxWidth = scale.dp(720f)
     val strokeDp = scale.dp(1f)
 
+    val rankingList by viewModel.leaderboard.collectAsState()
+
     val rowHeight = scale.dp(74f)
     val spacerHeight = scale.dp(16f)
     val visibleItems = 7
@@ -85,20 +93,6 @@ fun RankingsScreen(
     val listHeight = (rowHeight * visibleItems) + (spacerHeight * (visibleItems - 1)) - scale.dp(4f)
 
     val closeButtonShape = CutCornerShape(bottomStart = scale.dp(34f))
-
-    // [ TO - DO ]: Modify them to be managed dynamically (max. 25 items)
-    // Static entities
-    val rankingList = listOf(
-        RankingPlayer(1, "PlayerOne", "53.692.728", "PS", null),
-        RankingPlayer(2, "Horace Nelson", "50.422.871", "GB", null),
-        RankingPlayer(3, "Drybcius", "42.890.304", "PL", null),
-        RankingPlayer(4, "MAGA !!!", "42.871.096", "US", null),
-        RankingPlayer(5, "Soozy78#YES2", "40.963.814", "SC", null),
-        RankingPlayer(6, "popeye epinard", "37.501.503", "FR", null),
-        RankingPlayer(7, "TYR", "37.261.448", "GB", null),
-        RankingPlayer(8, "Sailor Moon", "35.100.000", "JP", null),
-        RankingPlayer(9, user?.name ?: "Sailor", "10.000", user?.countryCode ?: "IT", user?.profilePictureUrl)
-    )
 
     Box(
         modifier = Modifier
@@ -177,110 +171,121 @@ fun RankingsScreen(
                             .fillMaxWidth()
                             .height(listHeight)
                     ) {
-                        CompositionLocalProvider(
-                            LocalOverscrollFactory provides null
-                        ) {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxSize(),
-                                verticalArrangement = Arrangement.spacedBy(spacerHeight),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                        if (!rankingList.isEmpty()) {
+                            CompositionLocalProvider(
+                                LocalOverscrollFactory provides null
                             ) {
-                                itemsIndexed(rankingList) { _, player ->
-                                    val playerFlag = availableFlags.find { it.code == player.countryCode }
-                                    val flagUrl = playerFlag?.flagUrl
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxSize(),
+                                    verticalArrangement = Arrangement.spacedBy(spacerHeight),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    items(rankingList, key = { it.rank }) { player ->
+                                        val playerFlag = availableFlags.find { it.code == player.countryCode }
+                                        val flagUrl = playerFlag?.flagUrl
 
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(rowHeight)
-                                            .border(scale.dp(1f), White)
-                                            .background(Color(0xFF505058))
-                                            .padding(horizontal = scale.dp(38f)),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "#" + player.rank.toString(),
-                                            color = White,
-                                            fontSize = scale.sp(20f),
-                                            fontFamily = FontFamily.SansSerif,
-                                            fontWeight = FontWeight.Medium,
-                                            letterSpacing = scale.sp(2f),
-                                            style = TextStyle(
-                                                platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                                lineHeightStyle = LineHeightStyle(
-                                                    LineHeightStyle.Alignment.Center,
-                                                    LineHeightStyle.Trim.Both
-                                                ),
-                                                shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
-                                            )
-                                        )
+                                        val borderColor = if (user != null && player.id == user.id) Orange else White
 
-                                        Spacer(modifier = Modifier.width(scale.dp(42f)))
-
-                                        val avatarRequest = ImageRequest.Builder(context)
-                                            .data(player.avatarUrl)
-                                            .build()
-
-                                        AsyncImage(
-                                            model = avatarRequest,
-                                            contentDescription = "Avatar",
-                                            placeholder = painterResource(R.drawable.ic_avatar_placeholder),
-                                            error = painterResource(R.drawable.ic_avatar_placeholder),
-                                            contentScale = ContentScale.Crop,
+                                        Row(
                                             modifier = Modifier
-                                                .size(scale.dp(62f))
-                                        )
-
-                                        Spacer(modifier = Modifier.width(scale.dp(8f)))
-
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context).data(flagUrl).build(),
-                                            contentDescription = "Flag",
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .width(scale.dp(48f))
-                                                .height(scale.dp(32f))
-                                        )
-
-                                        Spacer(modifier = Modifier.width(scale.dp(12f)))
-
-                                        Text(
-                                            text = player.name,
-                                            color = White,
-                                            fontSize = scale.sp(18f),
-                                            fontWeight = FontWeight.Medium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f),
-                                            fontFamily = FontFamily.SansSerif,
-                                            letterSpacing = scale.sp(2f),
-                                            style = TextStyle(
-                                                platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                                lineHeightStyle = LineHeightStyle(
-                                                    LineHeightStyle.Alignment.Center,
-                                                    LineHeightStyle.Trim.Both
-                                                ),
-                                                shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                                                .fillMaxWidth()
+                                                .height(rowHeight)
+                                                .border(scale.dp(1f), borderColor)
+                                                .background(Color(0xFF505058))
+                                                .padding(horizontal = scale.dp(38f)),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "#${player.rank}",
+                                                color = White,
+                                                fontSize = scale.sp(20f),
+                                                fontFamily = FontFamily.SansSerif,
+                                                fontWeight = FontWeight.Medium,
+                                                letterSpacing = scale.sp(2f),
+                                                style = TextStyle(
+                                                    platformStyle = PlatformTextStyle(
+                                                        includeFontPadding = false
+                                                    ),
+                                                    lineHeightStyle = LineHeightStyle(
+                                                        LineHeightStyle.Alignment.Center,
+                                                        LineHeightStyle.Trim.Both
+                                                    ),
+                                                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                                                )
                                             )
-                                        )
 
-                                        Text(
-                                            text = player.score + " pt",
-                                            color = White,
-                                            fontSize = scale.sp(18f),
-                                            fontFamily = FontFamily.SansSerif,
-                                            fontWeight = FontWeight.Medium,
-                                            letterSpacing = scale.sp(2f),
-                                            style = TextStyle(
-                                                platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                                lineHeightStyle = LineHeightStyle(
-                                                    LineHeightStyle.Alignment.Center,
-                                                    LineHeightStyle.Trim.Both
-                                                ),
-                                                shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                                            Spacer(modifier = Modifier.width(scale.dp(42f)))
+
+                                            val avatarRequest = ImageRequest.Builder(context)
+                                                .data(player.avatarUrl)
+                                                .build()
+
+                                            AsyncImage(
+                                                model = avatarRequest,
+                                                contentDescription = "Avatar",
+                                                placeholder = painterResource(R.drawable.ic_avatar_placeholder),
+                                                error = painterResource(R.drawable.ic_avatar_placeholder),
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier
+                                                    .size(scale.dp(62f))
                                             )
-                                        )
+
+                                            Spacer(modifier = Modifier.width(scale.dp(8f)))
+
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(context).data(flagUrl)
+                                                    .build(),
+                                                contentDescription = "Flag",
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier
+                                                    .width(scale.dp(48f))
+                                                    .height(scale.dp(32f))
+                                            )
+
+                                            Spacer(modifier = Modifier.width(scale.dp(12f)))
+
+                                            Text(
+                                                text = player.name,
+                                                color = White,
+                                                fontSize = scale.sp(18f),
+                                                fontWeight = FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f),
+                                                fontFamily = FontFamily.SansSerif,
+                                                letterSpacing = scale.sp(2f),
+                                                style = TextStyle(
+                                                    platformStyle = PlatformTextStyle(
+                                                        includeFontPadding = false
+                                                    ),
+                                                    lineHeightStyle = LineHeightStyle(
+                                                        LineHeightStyle.Alignment.Center,
+                                                        LineHeightStyle.Trim.Both
+                                                    ),
+                                                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                                                )
+                                            )
+
+                                            Text(
+                                                text = player.score + " pt",
+                                                color = White,
+                                                fontSize = scale.sp(18f),
+                                                fontFamily = FontFamily.SansSerif,
+                                                fontWeight = FontWeight.Medium,
+                                                letterSpacing = scale.sp(2f),
+                                                style = TextStyle(
+                                                    platformStyle = PlatformTextStyle(
+                                                        includeFontPadding = false
+                                                    ),
+                                                    lineHeightStyle = LineHeightStyle(
+                                                        LineHeightStyle.Alignment.Center,
+                                                        LineHeightStyle.Trim.Both
+                                                    ),
+                                                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                                                )
+                                            )
+                                        }
                                     }
                                 }
                             }

@@ -13,8 +13,6 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import java.util.Locale
 
-
-// [ TO - DO ]: Add a new UseCase involving the following procedures
 @SuppressLint("MissingPermission")
 fun detectCountryFromLocation(context: Context, onCountryFound: (String) -> Unit) {
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)

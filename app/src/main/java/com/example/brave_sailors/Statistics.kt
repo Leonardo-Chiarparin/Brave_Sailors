@@ -46,6 +46,7 @@ import com.example.brave_sailors.ui.theme.LightBlue
 import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
+import java.util.Locale
 
 @Composable
 fun StatisticsScreen(
@@ -67,19 +68,29 @@ private fun Modal(
 
     val closeButtonShape = CutCornerShape(bottomStart = scale.dp(34f))
 
+    // -- DYNAMIC DATA CALCULATION --
+    // Exp. Logic: Example ( target = level * 1000 )
+    // [ NOTE ]: Modify the formula if necessary
+    val currentLevel = user?.level ?: 1
+    val currentXp = user?.currentXp ?: 0
+    val targetXp = currentLevel * 1000
+
+    // Compute bar's percentage ( 0f -> 1f )
+    val xpProgress = if (targetXp > 0) (currentXp.toFloat() / targetXp.toFloat()).coerceIn(0f, 1f) else 0f
+
     // List of stats
     val stats = listOf(
-        "Total games played" to (0).toString(),
-        "Victories" to (0).toString(),
-        "Defeats" to (0).toString(),
-        "Win rate (%)" to (0).toString()
+        "Total games played" to (user?.totalGamesPlayed ?: 0).toString(),
+        "Victories" to (user?.wins ?: 0).toString(),
+        "Defeats" to (user?.losses ?: 0).toString(),
+        "Win rate (%)" to String.format(Locale.US, "%.1f", user?.winRate ?: 0f)
     )
 
-    // List of infos
+    // List of battle infos
     val infos = listOf(
-        "Shots" to (0).toString(),
-        "Boats sunken" to (0).toString(),
-        "Accuracy (%)" to (0).toString()
+        "Shots" to (user?.totalShotsFired ?: 0).toString(),
+        "Boats sunken" to (user?.shipsDestroyed ?: 0).toString(),
+        "Accuracy (%)" to String.format(Locale.US, "%.1f", user?.accuracy ?: 0f)
     )
 
     Box(
@@ -182,6 +193,7 @@ private fun Modal(
 
                             Spacer(modifier = Modifier.height(scale.dp(36f)))
 
+                            // XP Bar
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -191,7 +203,7 @@ private fun Modal(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxHeight()
-                                        .fillMaxWidth(0f)
+                                        .fillMaxWidth(xpProgress)
                                         .background(Orange)
                                 )
                             }
@@ -199,7 +211,7 @@ private fun Modal(
                             Spacer(modifier = Modifier.height(scale.dp(14f)))
 
                             Text(
-                                text = "0 / ???",
+                                text = "$currentXp / $targetXp",
                                 color = White,
                                 fontSize = scale.sp(22f),
                                 textAlign = TextAlign.Center,

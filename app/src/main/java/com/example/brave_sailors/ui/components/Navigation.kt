@@ -72,7 +72,7 @@ enum class NavigationItem(
     Menu("MENU", Icons.Default.Menu, textOnSelect = true),
     Profile("PROFILE", Icons.Default.Person, textOnSelect = true),
     Home("HOME", Icons.Default.Anchor, textOnSelect = true),
-    Game("", Icons.Default.Games, textOnSelect = true),
+    Game("BONUS", Icons.Default.Games, textOnSelect = true),
     Fleet("FLEET", Icons.Default.DirectionsBoat, textOnSelect = true),
 }
 

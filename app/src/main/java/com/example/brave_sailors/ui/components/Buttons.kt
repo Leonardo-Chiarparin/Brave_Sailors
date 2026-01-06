@@ -951,7 +951,7 @@ fun BackButton(text: String, onClick: () -> Unit) {
         ) {
             Box(
                 modifier = Modifier
-                    .size(scale.dp(42f), scale.dp(84f))
+                    .size(scale.dp(42f), scale.dp(80f))
             ) {
                 Arrow(isLeft = true, modifier = Modifier.fillMaxSize())
             }
@@ -1124,7 +1124,7 @@ private fun Arrow(
     modifier: Modifier = Modifier
 ) {
     val scale = RememberScaleConversion()
-    Canvas(modifier = modifier.height(scale.dp(84f)).width(scale.dp(42f))) {
+    Canvas(modifier = modifier.height(scale.dp(80f)).width(scale.dp(42f))) {
         val gap = scale.dp(21f).toPx()
         val h = size.height
         val w = size.width
@@ -1137,5 +1137,398 @@ private fun Arrow(
         }
         drawPath(path = path, color = White, style = Stroke(width = 1f, cap = StrokeCap.Round, join = StrokeJoin.Round))
         drawPath(path = path, color = White)
+    }
+}
+
+@SuppressLint("UnrememberedMutableState")
+@Composable
+fun BeginButton(text: String, onClick: () -> Unit) {
+    val scale = RememberScaleConversion()
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isResumed by remember { mutableStateOf(false) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event -> isResumed = (event == Lifecycle.Event.ON_RESUME) }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val bgScale by animateFloatAsState(targetValue = if (isPressed) 0.975f else 1f, label = "scale")
+    val borderOffset by animateFloatAsState(targetValue = if (isPressed) 1f else 0f, label = "borderOffset")
+
+    val shineProgress = remember { Animatable(-0.4f) }
+    LaunchedEffect(isResumed) {
+        if (isResumed) {
+            while (isActive) {
+                shineProgress.animateTo(2.0f, tween(850, easing = LinearEasing))
+                delay(4150)
+                shineProgress.snapTo(-0.4f)
+            }
+        }
+        else
+            shineProgress.snapTo(-0.4f)
+    }
+
+    val progress = shineProgress.value
+
+    val bgColor by animateColorAsState(targetValue = if (isPressed) Orange.copy(alpha = 0.75f) else Orange.copy(alpha = 0.90f), label = "ButtonColorAnimation")
+    val cutSizeDp = scale.dp(16f)
+    val strokeWidthDp = scale.dp(2f)
+    val maxShift = scale.dp(2f)
+
+    Box(
+        modifier = Modifier
+            .width(scale.dp(246f))
+            .height(scale.dp(104f))
+            .drawBehind {
+                val w = size.width
+                val h = size.height
+                val r = cutSizeDp.toPx()
+                val strokeW = strokeWidthDp.toPx()
+                val halfStroke = strokeW / 2f
+                val shift = maxShift.toPx() * borderOffset
+
+                scale(scale = bgScale, pivot = center) {
+                    drawRoundRect(
+                        color = bgColor,
+                        cornerRadius = CornerRadius(r, r),
+                        size = size
+                    )
+                }
+
+                val arcSize = Size(2 * r, 2 * r)
+
+                translate(left = -shift, top = 0f) {
+                    val leftPath = Path().apply {
+                        arcTo(Rect(Offset(halfStroke, halfStroke), arcSize), 270f, -90f, true)
+                        lineTo(halfStroke, h - r)
+                        arcTo(Rect(Offset(halfStroke, h - 2 * r - halfStroke), arcSize), 180f, -90f, false)
+                    }
+                    drawPath(leftPath, White, style = Stroke(strokeW))
+                }
+
+                translate(left = shift, top = 0f) {
+                    val rightPath = Path().apply {
+                        arcTo(Rect(Offset(w - 2 * r - halfStroke, halfStroke), arcSize), 270f, 90f, true)
+                        lineTo(w - halfStroke, h - r)
+                        arcTo(Rect(Offset(w - 2 * r - halfStroke, h - 2 * r - halfStroke), arcSize), 0f, 90f, false)
+                    }
+                    drawPath(rightPath, White, style = Stroke(strokeW))
+                }
+
+                scale(scale = bgScale, pivot = center) {
+                    val clipPath = Path().apply {
+                        addRoundRect(RoundRect(Rect(0f, 0f, w, h), CornerRadius(r, r)))
+                    }
+
+                    clipPath(clipPath) {
+                        val shineWidth = scale.dp(72f).toPx()
+                        val startX = (progress * (w + shineWidth)) - shineWidth
+                        val endX = startX + shineWidth
+
+                        val brush = Brush.linearGradient(
+                            colors = listOf(White.copy(0f), White.copy(0.05f), White.copy(0.25f), White.copy(0.30f), White.copy(0.25f), White.copy(0.05f), White.copy(0f)),
+                            start = Offset(startX, h), end = Offset(endX, 0f)
+                        )
+                        if (progress > -0.4f) drawRect(brush = brush, size = size)
+                    }
+                }
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    scaleX = bgScale
+                    scaleY = bgScale
+                },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = text,
+                color = White,
+                fontSize = scale.sp(34f),
+                fontFamily = FontFamily.SansSerif,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = scale.sp(2f),
+                style = TextStyle(
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                    lineHeightStyle = LineHeightStyle(
+                        LineHeightStyle.Alignment.Center,
+                        LineHeightStyle.Trim.Both
+                    ),
+                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                )
+            )
+        }
+    }
+}
+
+@Composable
+fun ReturnButton(text: String, onClick: () -> Unit) {
+    val scale = RememberScaleConversion()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val bgScale by animateFloatAsState(targetValue = if (isPressed) 0.975f else 1f, label = "bgScale")
+    val borderOffset by animateFloatAsState(targetValue = if (isPressed) 1f else 0f, label = "borderOffset")
+
+    val baseColor = TransparentGrey.copy(alpha = 0.75f)
+    val pressedColor = TransparentGrey.copy(alpha = 0.5f)
+    val bgColor by animateColorAsState(targetValue = if (isPressed) pressedColor else baseColor, label = "ButtonColorAnimation")
+
+    val cutSizeDp = scale.dp(16f)
+    val strokeWidthDp = scale.dp(2f)
+    val maxShift = scale.dp(2f)
+
+    Box(
+        modifier = Modifier
+            .width(scale.dp(292f))
+            .height(scale.dp(92f))
+            .drawBehind {
+                val w = size.width
+                val h = size.height
+                val r = cutSizeDp.toPx()
+                val strokeW = strokeWidthDp.toPx()
+                val halfStroke = strokeW / 2f
+                val shift = maxShift.toPx() * borderOffset
+
+                scale(scale = bgScale, pivot = center) {
+                    drawRoundRect(
+                        color = bgColor,
+                        cornerRadius = CornerRadius(r, r),
+                        size = size
+                    )
+                }
+
+                val arcSize = Size(2 * r, 2 * r)
+
+                translate(left = -shift, top = 0f) {
+                    val leftPath = Path().apply {
+                        arcTo(Rect(Offset(halfStroke, halfStroke), arcSize), 270f, -90f, true)
+                        lineTo(halfStroke, h - r)
+                        arcTo(Rect(Offset(halfStroke, h - 2 * r - halfStroke), arcSize), 180f, -90f, false)
+                    }
+                    drawPath(leftPath, White, style = Stroke(strokeW))
+                }
+
+                translate(left = shift, top = 0f) {
+                    val rightPath = Path().apply {
+                        arcTo(Rect(Offset(w - 2 * r - halfStroke, halfStroke), arcSize), 270f, 90f, true)
+                        lineTo(w - halfStroke, h - r)
+                        arcTo(Rect(Offset(w - 2 * r - halfStroke, h - 2 * r - halfStroke), arcSize), 0f, 90f, false)
+                    }
+                    drawPath(rightPath, White, style = Stroke(strokeW))
+                }
+            }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = scale.dp(44f), start = scale.dp(16f))
+                .graphicsLayer {
+                    scaleX = bgScale
+                    scaleY = bgScale
+                },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(scale.dp(42f), scale.dp(80f))
+            ) {
+                Arrow(isLeft = true, modifier = Modifier.fillMaxSize())
+            }
+
+            Text(
+                text = text,
+                color = White,
+                fontSize = scale.sp(34f),
+                fontFamily = FontFamily.SansSerif,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = scale.sp(2f),
+                style = TextStyle(
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                    lineHeightStyle = LineHeightStyle(
+                        LineHeightStyle.Alignment.Center,
+                        LineHeightStyle.Trim.Both
+                    ),
+                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                )
+            )
+        }
+    }
+}
+
+@Composable
+fun FleetButton(paddingH: Float, paddingV: Float, text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    val scale = RememberScaleConversion()
+
+    val paddingHorizontal = scale.dp(paddingH)
+    val paddingVertical = scale.dp(paddingV)
+
+    val cutSizeDp = scale.dp(12f)
+    val buttonShape = CutCornerShape(
+        bottomStart = cutSizeDp,
+        bottomEnd = cutSizeDp,
+        topStart = 0.dp,
+        topEnd = 0.dp
+    )
+
+    val baseColor = TransparentGrey.copy(alpha = 0.75f)
+    val pressedColor = TransparentGrey.copy(alpha = 0.5f)
+
+    val borderColor = White
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val bgColor by animateColorAsState(
+        targetValue = if (isPressed) pressedColor else baseColor,
+        label = "ButtonColorAnimation"
+    )
+
+    val shrink by animateFloatAsState(
+        targetValue = if (isPressed) 0.975f else 1f,
+        label = "ButtonSqueezeAnimation"
+    )
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = shrink
+                scaleY = shrink
+            }
+            .clip(buttonShape)
+            .background(bgColor, buttonShape)
+            .drawBehind {
+                val strokePx = scale.dp(1f).toPx()
+
+                val cutPx = cutSizeDp.toPx()
+
+                val halfStroke = strokePx / 2f
+
+                val w = size.width
+                val h = size.height
+
+                val path = Path().apply {
+                    moveTo(halfStroke, 0f)
+                    lineTo(halfStroke, h - cutPx)
+                    lineTo(cutPx, h - halfStroke)
+                    moveTo(w - cutPx, h - halfStroke)
+                    lineTo(w - halfStroke, h - cutPx)
+                    lineTo(w - halfStroke, 0f)
+                }
+
+                drawPath(
+                    path = path,
+                    color = borderColor,
+                    style = Stroke(
+                        width = strokePx,
+                        cap = StrokeCap.Butt,
+                        join = StrokeJoin.Miter
+                    )
+                )
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick
+            )
+            .padding(horizontal = paddingHorizontal, vertical = paddingVertical),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = White,
+            fontSize = scale.sp(22f),
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = scale.sp(2f),
+            style = TextStyle(
+                platformStyle = PlatformTextStyle(
+                    includeFontPadding = false
+                ),
+                lineHeightStyle = LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Center,
+                    trim = LineHeightStyle.Trim.Both
+                ),
+                shadow = Shadow(
+                    color = Color.Black.copy(alpha = 0.75f),
+                    offset = Offset(2f, 2f),
+                    blurRadius = 4f
+                )
+            )
+        )
+    }
+}
+
+@Composable
+fun GoButton(onClick: () -> Unit) {
+    val scale = RememberScaleConversion()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val shrink by animateFloatAsState(
+        targetValue = if (isPressed) 0.975f else 1f,
+        label = "ButtonShrink"
+    )
+
+    val baseColor = TransparentGrey.copy(alpha = 0.75f)
+    val pressedColor = TransparentGrey.copy(alpha = 0.50f)
+
+    val bgColor by animateColorAsState(
+        targetValue = if (isPressed) pressedColor else baseColor,
+        label = "ButtonColor"
+    )
+
+    val buttonShape = CutCornerShape(scale.dp(12f))
+
+    Box(
+        modifier = Modifier
+            .graphicsLayer {
+                scaleX = shrink
+                scaleY = shrink
+            }
+            .clip(buttonShape)
+            .background(bgColor, buttonShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = scale.dp(76f), vertical = scale.dp(20f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Go",
+            color = White,
+            textAlign = TextAlign.Center,
+            fontSize = scale.sp(26f),
+            fontFamily = FontFamily.SansSerif,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = scale.sp(2f),
+            style = TextStyle(
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle = LineHeightStyle(
+                    LineHeightStyle.Alignment.Center,
+                    LineHeightStyle.Trim.Both
+                ),
+                shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+            )
+        )
     }
 }

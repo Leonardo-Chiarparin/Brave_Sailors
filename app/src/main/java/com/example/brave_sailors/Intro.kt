@@ -53,6 +53,7 @@ import com.example.brave_sailors.ui.components.Title
 import com.example.brave_sailors.ui.theme.DarkGrey
 import com.example.brave_sailors.ui.theme.DeepBlue
 import com.example.brave_sailors.ui.theme.Orange
+import com.example.brave_sailors.ui.utils.BackPress
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -107,6 +108,8 @@ private fun Modal(viewModel: ProfileViewModel, onFinished: () -> Unit) {
 
     var statusText by remember { mutableStateOf(". connect to server") }
     val radarDuration = 4500L * 2L // two times the duration taken by the radar to complete a turn
+
+    BackPress { false }
 
     LaunchedEffect(Unit) {
         val timerJob = async {

@@ -7,12 +7,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.brave_sailors.R
-import com.example.brave_sailors.data.local.database.FleetDao // Ensure this points to the correct package
-import com.example.brave_sailors.data.local.database.UserDao // Ensure this points to the correct package
+import com.example.brave_sailors.data.local.database.FleetDao
+import com.example.brave_sailors.data.local.database.UserDao
 import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.data.remote.api.Flag
 import com.example.brave_sailors.data.remote.api.RetrofitClient
 import com.example.brave_sailors.data.repository.UserRepository
+import com.example.brave_sailors.data.local.database.entity.RankingPlayer
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
@@ -20,9 +21,11 @@ import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -31,12 +34,23 @@ import java.util.UUID
 
 class ProfileViewModel(
     private val userDao: UserDao,
-    private val userRepository: UserRepository // Injected via Constructor
+    private val userRepository: UserRepository
 ) : ViewModel() {
 
-    // -- User State --
-    private val _userState = MutableStateFlow<User?>(null)
-    val userState: StateFlow<User?> = _userState
+    // -- User State (REACTIVE) --
+    // This connects directly to the local Room Database.
+    // When the user logs in or updates their profile, this flow emits the new data automatically.
+    val userState: StateFlow<User?> = userRepository.getUserFlow()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    // -- Leaderboard State --
+    // Holds the list of top 25 players fetched from Firebase Realtime Database.
+    private val _leaderboard = MutableStateFlow<List<RankingPlayer>>(emptyList())
+    val leaderboard = _leaderboard.asStateFlow()
 
     // -- Helpers regarding countries --
     private val packageName = "com.example.brave_sailors"
@@ -68,15 +82,41 @@ class ProfileViewModel(
     private var sessionListener: ValueEventListener? = null
     private var monitoredUserId: String? = null
 
-    var showHomeWelcome: Boolean = false
+    var showHomeWelcome: Boolean = true
 
     init {
         fetchFlags()
+
+        // Start listening to the global leaderboard updates
+        startLeaderboardSync()
+
+        // -- Session Monitor --
+        // Automatically starts observing session token when a user logs in (userState becomes non-null)
+        viewModelScope.launch {
+            userState.collectLatest { user ->
+                if (user != null && !user.sessionToken.isNullOrEmpty()) {
+                    startSessionObserver(user.id, user.sessionToken)
+                } else {
+                    removeSessionListener()
+                }
+            }
+        }
+    }
+
+    /**
+     * Starts observing the leaderboard data from the repository.
+     */
+    private fun startLeaderboardSync() {
+        viewModelScope.launch(Dispatchers.IO) {
+            userRepository.getLeaderboard()
+                .collect { list ->
+                    _leaderboard.value = list
+                }
+        }
     }
 
     /**
      * Initializes the user session token.
-     * If not a new user, it updates the token in Firebase and Local DB.
      */
     fun initializeSession(user: User, isNewUser: Boolean, onComplete: (User) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -106,7 +146,6 @@ class ProfileViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 Log.d("ProfileViewModel", "Starting flags download...")
-                // [ NOTE ]: Ensure RetrofitClient.api is correct based on your file setup
                 val flags = RetrofitClient.api.getFlags()
                 if (flags.isNotEmpty()) {
                     _flagList.value = flags.sortedBy { it.name }
@@ -119,23 +158,13 @@ class ProfileViewModel(
         }
     }
 
-    fun loadUser(userId: String) {
-        viewModelScope.launch {
-            userDao.observeUserById(userId).collectLatest { user ->
-                _userState.value = user
-                if (user != null && !user.sessionToken.isNullOrEmpty()) {
-                    startSessionObserver(user.id, user.sessionToken)
-                }
-            }
-        }
-    }
-
+    // NOTE: 'loadUser' is no longer needed because userState observes the DB automatically.
+    // We keep 'registerUser' just in case, but usually RegisterViewModel handles creation.
     fun registerUser(user: User) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 userDao.insertUser(user)
-                // Sync data to cloud immediately
-                userRepository.syncLocalToCloud(user)
+                userRepository.syncLocalToCloud(user.id)
                 Log.d("ProfileViewModel", "User registered and synced: ${user.id}")
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "Error while inserting user: ${e.message}")
@@ -168,10 +197,10 @@ class ProfileViewModel(
 
         viewModelScope.launch(Dispatchers.IO) {
             userDao.deleteAllUsers()
-
+            // No need to manually set _userState to null, the Flow will do it automatically
+            // when the table becomes empty.
             withContext(Dispatchers.Main) {
                 _forceLogoutEvent.value = false
-                _userState.value = null
             }
         }
     }
@@ -187,19 +216,15 @@ class ProfileViewModel(
     }
 
     fun updateCountry(countryCode: String) {
-        val currentUser = _userState.value
-        if (currentUser == null) {
-            Log.e("ProfileViewModel", "Error: User is null.")
-            return
-        }
+        val currentUser = userState.value ?: return
+
         val updatedUser = currentUser.copy(countryCode = countryCode)
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // We update the DB. Room will emit the new value to 'userState'.
                 userDao.updateUser(updatedUser)
-                _userState.value = updatedUser
                 Log.d("ProfileViewModel", "Country has been changed to: $countryCode")
-                // Sync update
-                userRepository.syncLocalToCloud(updatedUser)
+                userRepository.syncLocalToCloud(updatedUser.id)
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "Error during update: ${e.message}")
                 e.printStackTrace()
@@ -212,16 +237,16 @@ class ProfileViewModel(
         if (newName.isNotBlank()) {
             val updatedUser = currentUser.copy(name = newName)
             viewModelScope.launch(Dispatchers.IO) {
+                // Update Local DB
                 userDao.updateUserName(currentUser.id, newName)
-                _userState.value = updatedUser
-                // Sync update
-                userRepository.syncLocalToCloud(updatedUser)
+                // Sync Cloud
+                userRepository.syncLocalToCloud(updatedUser.id)
             }
         }
     }
 
     fun updateProfilePicture(context: Context, bitmap: Bitmap) {
-        val currentUser = _userState.value ?: return
+        val currentUser = userState.value ?: return
         viewModelScope.launch {
             try {
                 val updateTime = System.currentTimeMillis()
@@ -236,12 +261,12 @@ class ProfileViewModel(
                 }
                 withContext(Dispatchers.IO) {
                     userDao.updateProfilePicture(currentUser.id, filePath, updateTime)
+                    // We construct the object just for the Cloud Sync
                     val updatedUser = currentUser.copy(
                         profilePictureUrl = filePath,
                         lastUpdated = updateTime
                     )
-                    // Sync update
-                    userRepository.syncLocalToCloud(updatedUser)
+                    userRepository.syncLocalToCloud(updatedUser.id)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -249,8 +274,56 @@ class ProfileViewModel(
         }
     }
 
+    fun resetPassword(email: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = userRepository.resetPassword(email)
+
+            withContext(Dispatchers.Main) {
+                result.onSuccess { message ->
+                    onResult(true, message) // Pass the success message
+                }.onFailure { error ->
+                    // Pass the error message (the one defined in the Repository)
+                    onResult(false, error.message ?: "Unknown error occurred.")
+                }
+            }
+        }
+    }
+
+    fun deleteAccount(user: User, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            // Here we use 'userRepository' instead of 'repository'
+            val result = userRepository.deleteAccount(user)
+            if (result.isSuccess) {
+                onResult(true)
+            } else {
+                onResult(false)
+            }
+        }
+    }
+
+    fun sendFriendRequest(targetId: String, onResult: (Boolean, String) -> Unit) {
+        val currentUser = userState.value ?: return
+
+        // Prevent adding yourself
+        if (targetId == currentUser.id) {
+            onResult(false, "You cannot add your own ID!")
+            return
+        }
+
+        viewModelScope.launch {
+            // This now calls the updated logic in Repository that adds the friend directly ("accepted")
+            val result = userRepository.sendFriendRequest(currentUser, targetId)
+            result.onSuccess { message ->
+                onResult(true, message)
+            }.onFailure { error ->
+                // This will capture the "Player ID does not exist" message
+                onResult(false, error.message ?: "An unknown error occurred.")
+            }
+        }
+    }
+
     fun restoreGoogleProfile() {
-        val currentUser = _userState.value ?: return
+        val currentUser = userState.value ?: return
         val restoredUser = currentUser.copy(
             name = currentUser.googleName,
             profilePictureUrl = currentUser.googlePhotoUrl,
@@ -259,8 +332,7 @@ class ProfileViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             userDao.updateUser(restoredUser)
             Log.d("ProfileViewModel", "Profile restored to Google defaults")
-            // Sync update
-            userRepository.syncLocalToCloud(restoredUser)
+            userRepository.syncLocalToCloud(restoredUser.id)
         }
     }
 
@@ -270,16 +342,15 @@ class ProfileViewModel(
     }
 }
 
-// Factory Class to handle Dependency Injection from MainActivity
+// Factory (Kept compatible with the dependency injection)
 class ProfileViewModelFactory(
     private val userDao: UserDao,
-    private val fleetDao: FleetDao, // Kept to match MainActivity params, though unused inside ProfileViewModel
+    private val fleetDao: FleetDao,
     private val userRepository: UserRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ProfileViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            // Pass only what the ViewModel constructor needs
             return ProfileViewModel(userDao, userRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

@@ -77,8 +77,9 @@ import com.example.brave_sailors.ui.theme.LightBlue
 import com.example.brave_sailors.ui.theme.LightGrey
 import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.White
+import com.example.brave_sailors.ui.utils.BackPress
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
-import com.example.brave_sailors.ui.utils.findActivity
+import com.example.brave_sailors.ui.utils.restartApp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -171,7 +172,6 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
 
                     if (!isNewUser) {
                         viewModel.initializeSession(user, isNewUser = false) {
-                            viewModel.loadUser(user.id)
 
                             if (detectedCountryCode != null)
                                 viewModel.updateCountry(detectedCountryCode!!)
@@ -202,7 +202,7 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                     delay(500)
 
                     isSigningIn = false
-                    context.findActivity()?.recreate()
+                    restartApp(context)
                 }
             }
         }
@@ -223,6 +223,8 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
             detectedCountryCode = "IT" // Fallback
         }
     }
+
+    BackPress { false }
 
     LaunchedEffect(Unit) {
         if (!didLogin) {
@@ -380,7 +382,7 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
         ) {
             Box(
                 modifier = Modifier
-                    .padding(all = scale.dp(28f))
+                    .padding(vertical = scale.dp(26f), horizontal = scale.dp(12f))
                     .clip(RectangleShape),
                 contentAlignment = Alignment.Center
             ) {
@@ -388,7 +390,7 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
 
                 Box(
                     modifier = Modifier
-                        .padding(horizontal = scale.dp(48f)),
+                        .padding(horizontal = scale.dp(60f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -476,8 +478,8 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                                         user.copy(countryCode = detectedCountryCode!!)
                                     } else user
 
-                                    viewModel.initializeSession(finalUser, isNewUser = false) { savedUser ->
-                                        viewModel.loadUser(savedUser.id)
+                                    viewModel.initializeSession(finalUser, isNewUser = false) { _ ->
+                                        viewModel.showHomeWelcome = false
                                         onStartApp()
                                     }
                                 }

@@ -20,7 +20,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -39,6 +41,7 @@ import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.model.ProfileViewModelFactory
 import com.example.brave_sailors.ui.theme.Brave_SailorsTheme
 import com.example.brave_sailors.ui.utils.LockScreenOrientation
+import com.example.brave_sailors.ui.utils.restartApp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -46,7 +49,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // [ TO - DO ]: Change the theme according to the current page ( if necessary )
+        // Activate Edge-To-Edge layout with transparent system bars
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(
                 android.graphics.Color.TRANSPARENT
@@ -56,34 +59,36 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        // Immersive Sticky Mode
+        // Immersive Sticky Mode ( system bars are hidden, shown temporarily on swipe )
         val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
-        // Database
+        // -- DATABASE & REPOSITORY SETUP --
         val db = AppDatabase.getDatabase(this)
         val userDao = db.userDao()
         val fleetDao = db.fleetDao()
+        val friendDao = db.friendDao()
+
         val apiService = RetrofitClient.api
-        val userRepository = UserRepository(apiService, userDao, fleetDao)
+        val userRepository = UserRepository(apiService, userDao, fleetDao, friendDao)
 
         setContent {
             Brave_SailorsTheme {
-                // [ TO - DO ]: User's preferences regarding the screen orientation should be managed through a proper variable, whose state will be changed according to the settings inside the correspondent page ( accessible via Menu.kt )
-                // e.g., val orientation by settingsViewModel.isPortrait.collectAsState(initial = true)
-                // [ NOTE ]: Landscape shapes of the pages will be implemented as soon as possible
+                // [ NOTE ]: Force portrait orientation for the entire application
                 LockScreenOrientation(isPortrait = true)
 
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
+                // -- PROFILE'S VIEW MODEL ( an entity being shared across multiple screens ) --
                 val profileViewModel: ProfileViewModel = viewModel(
                     factory = ProfileViewModelFactory(userDao, fleetDao, userRepository)
                 )
 
-                // --- GLOBAL APP TIMEOUT LOGIC (1 MINUTE) ---
+                // -- GLOBAL TIMEOUT LOGIC ( 1 minute ) --
+                // e.g., if the program stays in the background ( suspended ) for more than the previous duration, it will be restarted from the initial page ( except for specific routes )
                 val lifecycleOwner = LocalLifecycleOwner.current
                 var lastBackgroundTime by remember { mutableStateOf(0L) }
                 val timeoutDuration = 60 * 1000L // 1 minute
@@ -92,10 +97,12 @@ class MainActivity : ComponentActivity() {
                     val observer = LifecycleEventObserver { _, event ->
                         when (event) {
                             Lifecycle.Event.ON_STOP -> {
+                                // Save the timestamp whenever the application goes to background
                                 lastBackgroundTime = System.currentTimeMillis()
                             }
 
                             Lifecycle.Event.ON_RESUME -> {
+                                // The program comes back to foreground: the elapsed time is checked
                                 val currentTime = System.currentTimeMillis()
                                 val elapsedTime = currentTime - lastBackgroundTime
 
@@ -116,6 +123,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
+                                // Reset the timestamp
                                 lastBackgroundTime = 0L
                             }
 
@@ -127,6 +135,8 @@ class MainActivity : ComponentActivity() {
                         lifecycleOwner.lifecycle.removeObserver(observer)
                     }
                 }
+
+                val context = LocalContext.current
 
                 // State used to determine the startDestination
                 var startDestination by remember { mutableStateOf<String?>(null) }
@@ -144,6 +154,7 @@ class MainActivity : ComponentActivity() {
                         popEnterTransition = { EnterTransition.None },
                         popExitTransition = { ExitTransition.None }
                     ) {
+                        // -- LOADING SCREEN --
                         composable("loading") {
                             Box(
                                 modifier = Modifier
@@ -152,12 +163,14 @@ class MainActivity : ComponentActivity() {
                             ) {  }
 
                             LaunchedEffect(Unit) {
-                                val user = withContext(Dispatchers.IO) {
-                                    userDao.getCurrentUser()
+                                // One-time DB control to decide the starting path
+                                val userExists = withContext(Dispatchers.IO) {
+                                    // [ NOTE ]: getCurrentUser must return User? ( not Flow )
+                                    userDao.getCurrentUser() != null
                                 }
 
-                                if (user != null) {
-                                    profileViewModel.loadUser(user.id)
+                                if (userExists) {
+                                    // profileViewModel observes the DB automatically, no manual loading is actually needed
                                     profileViewModel.showHomeWelcome = true
 
                                     navController.navigate("intro") {
@@ -171,7 +184,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        // 2. Terms
+                        // -- TERMS SCREEN --
                         composable("terms") {
                             TermsScreen(
                                 innerPadding = innerPadding,
@@ -184,7 +197,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // 3. Intro
+                        // -- INTRO SCREEN --
                         composable("intro") {
                             IntroScreen(
                                 innerPadding = innerPadding,
@@ -197,15 +210,13 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // 4. Home
+                        // -- HOME SCREEN --
                         composable("home") {
                             HomeScreen(
                                 innerPadding = innerPadding,
                                 viewModel = profileViewModel,
-                                onNavigateToTerms = {
-                                    navController.navigate("terms") {
-                                        popUpTo(0) { inclusive = true }
-                                    }
+                                onRestart = {
+                                    restartApp(context)
                                 }
                             )
                         }

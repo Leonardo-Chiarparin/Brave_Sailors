@@ -55,7 +55,14 @@ fun AccountSettingsScreen(
     onOpenAccess: () -> Unit,
     onOpenDeleteAccount: () -> Unit
 ) {
-    Modal(user, onBack, onOpenPasswordRecovery, onOpenRegister, onOpenAccess, onOpenDeleteAccount)
+    Modal(
+        user,
+        onBack,
+        onOpenPasswordRecovery = onOpenPasswordRecovery,
+        onOpenRegister = onOpenRegister,
+        onOpenAccess = onOpenAccess,
+        onOpenDeleteAccount = onOpenDeleteAccount
+    )
 }
 
 @Composable
@@ -71,6 +78,9 @@ private fun Modal(
     val interactionSource = remember { MutableInteractionSource() }
     val maxWidth = scale.dp(720f)
     val strokeDp = scale.dp(1f)
+
+    val isGoogleUser = !user?.googleName.isNullOrEmpty()
+    val provider = if (isGoogleUser) "Google" else "Email"
 
     val closeButtonShape = CutCornerShape(bottomStart = scale.dp(34f))
 
@@ -218,7 +228,7 @@ private fun Modal(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "Account ID: ${user?.id}",
+                                    text = "Account ID: ${user?.id ?: "Guest"}",
                                     color = White,
                                     fontSize = scale.sp(20f),
                                     textAlign = TextAlign.Center,
@@ -258,7 +268,7 @@ private fun Modal(
                                 Spacer(modifier = Modifier.height(scale.dp(8f)))
 
                                 Text(
-                                    text = "Authentication: Google",
+                                    text = "Authentication: $provider",
                                     color = White,
                                     fontSize = scale.sp(20f),
                                     textAlign = TextAlign.Center,
