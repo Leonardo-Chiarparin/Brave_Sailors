@@ -69,9 +69,10 @@ class MainActivity : ComponentActivity() {
         val userDao = db.userDao()
         val fleetDao = db.fleetDao()
         val friendDao = db.friendDao()
+        val matchDao = db.matchDao()
 
         val apiService = RetrofitClient.api
-        val userRepository = UserRepository(apiService, userDao, fleetDao, friendDao)
+        val userRepository = UserRepository(apiService, userDao, fleetDao, friendDao, matchDao)
 
         setContent {
             Brave_SailorsTheme {

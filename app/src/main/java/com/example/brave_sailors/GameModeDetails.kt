@@ -55,9 +55,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.brave_sailors.data.local.database.AppDatabase
+import com.example.brave_sailors.model.GameModeDetailsViewModel
+import com.example.brave_sailors.model.GameModeDetailsViewModelFactory
 import com.example.brave_sailors.ui.components.BackButton
 import com.example.brave_sailors.ui.components.ContinueButton
-import com.example.brave_sailors.ui.components.DialogDeployment
 import com.example.brave_sailors.ui.components.DialogDifficulty
 import com.example.brave_sailors.ui.components.DialogError
 import com.example.brave_sailors.ui.components.DialogFiringRules
@@ -68,23 +71,29 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun GameModeDetailsScreen(
-    gameModeIndex: Int, // 0 = Single player vs. computer
+    db: AppDatabase, // Added to access the DAO
+    gameModeIndex: Int, // 0 = Single player vs. computer, 1 = Local, 2 = Online
     onBack: () -> Unit,
-    onContinue: (String?, String) -> Unit // difficulty ( it is relevant for option 0 ) and firing rule
+    onContinue: (String?, String) -> Unit // difficulty (nullable) and firing rule
 ) {
-    Modal(gameModeIndex, onBack, onContinue)
+    Modal(db, gameModeIndex, onBack, onContinue)
 }
 
 @Composable
 private fun Modal(
+    db: AppDatabase,
     gameModeIndex: Int,
     onBack: () -> Unit,
     onContinue: (String?, String) -> Unit
 ) {
     val scale = RememberScaleConversion()
     val maxWidth = scale.dp(720f)
-
     val bgColor = Color(0xFF26768E)
+
+    // ViewModel initialization
+    val viewModel: GameModeDetailsViewModel = viewModel(
+        factory = GameModeDetailsViewModelFactory(db.fleetDao(), userDao = db.userDao())
+    )
 
     val scope = rememberCoroutineScope()
 
@@ -96,9 +105,10 @@ private fun Modal(
     var showDialogDifficulty by remember { mutableStateOf(false) }
     var showDialogFiringRules by remember { mutableStateOf(false) }
 
+    // Dialogs for specific errors
     var showDialogErrorVsComputer by remember { mutableStateOf(false) }
     var showDialogErrorVsPlayer2 by remember { mutableStateOf(false) }
-    var showDialogErrorVsKith by remember { mutableStateOf(false) }
+    var showDialogErrorVsKith by remember { mutableStateOf(false) } // Kith = Online Opponent
 
     LaunchedEffect(Unit) {
         buttonsVisible = true
@@ -112,6 +122,27 @@ private fun Modal(
         }
     }
 
+    // Centralized logic to validate the fleet
+    fun validateAndContinue() {
+        viewModel.validateFleetAndProceed(
+            gameModeIndex = gameModeIndex,
+            difficulty = difficulty,
+            firingRule = firingRule,
+            onFleetFound = { diff, rule ->
+                // Fleet found! Proceed to the next page
+                onContinue(diff, rule)
+            },
+            onFleetMissing = { mode ->
+                // Fleet not found, open the correct dialog
+                when (mode) {
+                    0 -> showDialogErrorVsComputer = true
+                    1 -> showDialogErrorVsPlayer2 = true
+                    2 -> showDialogErrorVsKith = true
+                }
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -121,7 +152,7 @@ private fun Modal(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .widthIn(max = maxWidth) // [ MEMO ]: Remove it if not necessary
+                .widthIn(max = maxWidth)
                 .padding(top = scale.dp(216f))
         ) {
             Column(
@@ -129,13 +160,12 @@ private fun Modal(
                     .padding(horizontal = scale.dp(8f)),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // ... Header Row ...
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Spacer(modifier = Modifier.width(scale.dp(80f)))
-
                     Box(
                         modifier = Modifier
                             .height(scale.dp(62f))
@@ -165,6 +195,7 @@ private fun Modal(
 
                 Spacer(modifier = Modifier.height(scale.dp(74f)))
 
+                // Show difficulty selection only if Vs Computer
                 if (gameModeIndex == 0) {
                     SettingsRow(
                         option = "DIFFICULTY",
@@ -172,7 +203,6 @@ private fun Modal(
                         color = bgColor,
                         onClick = { showDialogDifficulty = true }
                     )
-
                     Spacer(modifier = Modifier.height(scale.dp(26f)))
                 }
 
@@ -191,8 +221,7 @@ private fun Modal(
                 contentAlignment = Alignment.Center
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -212,62 +241,22 @@ private fun Modal(
                         enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
                         exit = slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(200)) + fadeOut(animationSpec = tween(200))
                     ) {
-                        when (gameModeIndex) {
-                            0 -> {
-                                ContinueButton(
-                                    text = "Continue",
-                                    onClick = {
-                                        // [ TO - DO ]: If the user has not a formation, then it must be triggered a DialogError with the message "Armada could not be found."
-                                        // if (!fleet.isNullOrEmpty)
-                                            onContinue(difficulty, firingRule) // go to the next page, which requires parameters as difficulty, firingRules, and so on to prepare the match and update its state ( the grid, the result, etc. )... [ NOTE ]: Take a look at HomeScreen
-                                        // else
-                                        //  showDialogErrorVsComputer = true
-                                    }
-                                )
-                            }
-                            1 -> {
-                                ContinueButton(
-                                    text = "Continue",
-                                    onClick = {
-                                        // [ TO - DO ]: If the user (which coincides with the Player 1 in this case ) has not a formation, then it must be triggered a DialogError with the message "Player 1's armada could not be found. Configure it on the dedicated view to allow the opposing user to proceed."
-                                        // e.g.
-                                        // if (!fleet.isNullOrEmpty)
-                                            onContinue(null, firingRule)
-                                        // else
-                                        //  showDialogErrorVsPlayer2 = true
-                                    }
-                                )
-                            }
-                            2 -> {
-                                ContinueButton(
-                                    text = "Continue",
-                                    onClick = {
-                                        // [ TO - DO ]: If the user (which coincides with the Player 1 in this case ) has not a formation, then it must be triggered a DialogError with the message "Armada could not be found."
-                                        // e.g.
-                                        // if (!fleet.isNullOrEmpty)
-                                            onContinue(null, firingRule)
-                                        //  go to the next page, which requires parameters as difficulty, firingRules, ProfileViewModel, and so on to prepare the match and update its state ( the grid, the result, etc. )...
-                                        // else
-                                        //  showDialogErrorVsKith = true
-                                    }
-                                )
-                            }
-                            else -> {}
-                        }
+                        // Single Continue button that calls validation
+                        ContinueButton(
+                            text = "Continue",
+                            onClick = { validateAndContinue() }
+                        )
                     }
                 }
             }
         }
 
         // -- DIALOGS --
-        // -- Options --
         if (showDialogDifficulty) {
             DialogDifficulty(
                 currentDifficulty = difficulty,
                 onDismiss = { newDifficulty ->
-                    if (difficulty != newDifficulty)
-                        difficulty = newDifficulty
-
+                    if (difficulty != newDifficulty) difficulty = newDifficulty
                     showDialogDifficulty = false
                 }
             )
@@ -277,9 +266,7 @@ private fun Modal(
             DialogFiringRules(
                 currentRule = firingRule,
                 onDismiss = { newRule ->
-                    if (firingRule != newRule)
-                        firingRule = newRule
-
+                    if (firingRule != newRule) firingRule = newRule
                     showDialogFiringRules = false
                 }
             )
@@ -309,6 +296,7 @@ private fun Modal(
     }
 }
 
+// ... SettingsRow (remains unchanged) ...
 @Composable
 private fun SettingsRow(
     option: String,
@@ -317,24 +305,11 @@ private fun SettingsRow(
     onClick: () -> Unit
 ) {
     val scale = RememberScaleConversion()
-
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-
-    val bgScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.975f else 1f,
-        label = "BgScale"
-    )
-
-    val animatedBgColor by animateColorAsState(
-        targetValue = if (isPressed) color.copy(alpha = 0.75f) else color,
-        label = "BgColor"
-    )
-
-    val borderOffset by animateFloatAsState(
-        targetValue = if (isPressed) 1f else 0f,
-        label = "BorderOffset"
-    )
+    val bgScale by animateFloatAsState(if (isPressed) 0.975f else 1f, label = "BgScale")
+    val animatedBgColor by animateColorAsState(if (isPressed) color.copy(alpha = 0.75f) else color, label = "BgColor")
+    val borderOffset by animateFloatAsState(if (isPressed) 1f else 0f, label = "BorderOffset")
 
     Row(
         modifier = Modifier
@@ -352,10 +327,7 @@ private fun SettingsRow(
             letterSpacing = scale.sp(2f),
             style = TextStyle(
                 platformStyle = PlatformTextStyle(includeFontPadding = false),
-                lineHeightStyle = LineHeightStyle(
-                    LineHeightStyle.Alignment.Center,
-                    LineHeightStyle.Trim.Both
-                ),
+                lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
                 shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
             )
         )

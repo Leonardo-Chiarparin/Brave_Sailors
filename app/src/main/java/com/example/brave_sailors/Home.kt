@@ -156,10 +156,11 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
     val db = AppDatabase.getDatabase(context)
     val api = RetrofitClient.api
 
-    val repository = remember { UserRepository(api, db.userDao(), db.fleetDao(), db.friendDao()) }
+    val repository = remember { UserRepository(api, db.userDao(), db.fleetDao(), db.friendDao(), db.matchDao()) }
 
     val registerViewModel: RegisterViewModel = viewModel(factory = RegisterViewModelFactory(repository))
     val profileViewModel: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(db.userDao(), db.fleetDao(), repository))
+
 
     // -- ACCOUNT SETTINGS STATE --
     val uiStateAS = registerViewModel.uiState
@@ -397,6 +398,7 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             exit = fadeOut(animationSpec = tween(200))
                         ) {
                             GameModeDetailsScreen(
+                                db = db,
                                 gameModeIndex = chosenGameModeIndex,
                                 onBack = { overlayHomeState = OverlayHomeState.IDLE },
                                 onContinue = { difficulty, rule ->
@@ -424,7 +426,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                                 }
                             )
                         }
-
                         // -- FLEET GUEST --
                         AnimatedVisibility(
                             visible = overlayHomeState == OverlayHomeState.SHOWING_GUEST_FLEET,
@@ -466,6 +467,8 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
+                        val context = LocalContext.current
+                        val db = remember { AppDatabase.getDatabase(context) }
                         // -- PLAYING VS COMPUTER --
                         AnimatedVisibility(
                             visible = overlayHomeState == OverlayHomeState.PLAYING_VS_COMPUTER,
@@ -474,20 +477,16 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                         ) {
                             // [ TO - DO ]: Add the remaining parameters, especially the ones related to the player's formation
                             MatchVsComputerScreen(
+                                db = db,
                                 difficulty = chosenDifficulty ?: "Normal",
                                 firingRule = chosenFiringRule,
                                 user = entry,
                                 flag = availableFlags.find { it.code == entry?.countryCode },
                                 onRetire = {
-                                    // [ TO - DO ]: The loss must be registered using the profileViewModel
-                                    // e.g., viewModel.update...
 
                                     overlayHomeState = OverlayHomeState.IDLE
                                 },
                                 onComplete = { isVictory ->
-                                    // [ TO - DO ]: Update the user's statistics regarding the amount of matches he/she played, number of victories or losses ( according to the boolean isVictory ), and so on
-                                    // e.g., viewModel.update...
-
                                     overlayHomeState = OverlayHomeState.IDLE
                                 }
                             )

@@ -4,7 +4,7 @@ package com.example.brave_sailors.model
 const val GRID_SIZE = 8
 
 // Enum representing the status of a single cell
-enum class CellStatus { EMPTY, SHIP }
+enum class CellStatus { EMPTY, SHIP, HIT, MISS }
 
 // Enum for the orientation of the ship being placed
 enum class ShipOrientation { HORIZONTAL, VERTICAL }

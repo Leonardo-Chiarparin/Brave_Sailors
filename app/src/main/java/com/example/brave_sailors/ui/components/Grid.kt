@@ -61,12 +61,21 @@ import kotlin.math.roundToInt
 @Composable
 fun FleetStatus(
     turn: Int,
-    isPlayerTurn: Boolean
+    isPlayerTurn: Boolean,
+    // Defaulting to null preserves the logic for setup screens.
+    shipsRemaining: Map<Int, Int>? = null
 ) {
     val scale = RememberScaleConversion()
 
     val boxShape = CutCornerShape(scale.dp(36f))
     val titleText = if (isPlayerTurn) "ENEMY FLEET" else "YOUR FLEET"
+
+    // Logic: If the map is passed (Game Mode), use the map values.
+    // If not (Setup Mode), use the hardcoded values from your original design (2, 3, 2, 1).
+    val count1 = shipsRemaining?.get(1) ?: 2
+    val count2 = shipsRemaining?.get(2) ?: 3
+    val count3 = shipsRemaining?.get(3) ?: 2
+    val count4 = shipsRemaining?.get(4) ?: 1
 
     Box(
         modifier = Modifier
@@ -133,6 +142,7 @@ fun FleetStatus(
                             horizontalArrangement = Arrangement.spacedBy(scale.dp(10f)),
                             verticalAlignment = Alignment.Bottom
                         ) {
+                            // Ship Size 1
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(scale.dp(6f))
@@ -140,7 +150,7 @@ fun FleetStatus(
                                 ShipIcon(1)
 
                                 Text(
-                                    text = "2",
+                                    text = "$count1", // Updated to use variable
                                     color = Orange,
                                     textAlign = TextAlign.Center,
                                     fontSize = scale.sp(20f),
@@ -159,6 +169,7 @@ fun FleetStatus(
                                 )
                             }
 
+                            // Ship Size 2
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(scale.dp(6f))
@@ -166,7 +177,7 @@ fun FleetStatus(
                                 ShipIcon(2)
 
                                 Text(
-                                    text = "3",
+                                    text = "$count2", // Updated to use variable
                                     color = Orange,
                                     textAlign = TextAlign.Center,
                                     fontSize = scale.sp(20f),
@@ -185,6 +196,7 @@ fun FleetStatus(
                                 )
                             }
 
+                            // Ship Size 3
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(scale.dp(6f))
@@ -192,7 +204,7 @@ fun FleetStatus(
                                 ShipIcon(3)
 
                                 Text(
-                                    text = "2",
+                                    text = "$count3", // Updated to use variable
                                     color = Orange,
                                     textAlign = TextAlign.Center,
                                     fontSize = scale.sp(20f),
@@ -211,6 +223,7 @@ fun FleetStatus(
                                 )
                             }
 
+                            // Ship Size 4
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(scale.dp(6f))
@@ -218,7 +231,7 @@ fun FleetStatus(
                                 ShipIcon(4)
 
                                 Text(
-                                    text = "1",
+                                    text = "$count4", // Updated to use variable
                                     color = Orange,
                                     textAlign = TextAlign.Center,
                                     fontSize = scale.sp(20f),

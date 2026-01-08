@@ -4,7 +4,11 @@ import android.util.Log
 import com.example.brave_sailors.data.local.database.FleetDao
 import com.example.brave_sailors.data.local.database.FriendDao
 import com.example.brave_sailors.data.local.database.UserDao
-
+// --- NEW IMPORTS ADDED ---
+import com.example.brave_sailors.data.local.database.MatchDao
+import com.example.brave_sailors.data.local.database.entity.MatchResult
+import com.example.brave_sailors.data.local.database.entity.MoveLog
+// -----------------------------
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -28,37 +32,31 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 class UserRepository(
-    private val api: SailorApi, // Remote API client
-    private val userDao: UserDao, // Room DAO for user data
-    private val fleetDao: FleetDao, // Room DAO for saved fleet data
-    private val friendDao: FriendDao, // Room DAO for friends
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance() // Firebase Auth instance
+    private val api: SailorApi,
+    private val userDao: UserDao,
+    private val fleetDao: FleetDao,
+    private val friendDao: FriendDao,
+    private val matchDao: MatchDao,
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) {
 
-    private val database = FirebaseDatabase.getInstance() // Firebase Realtime Database entry point
+    private val database = FirebaseDatabase.getInstance()
 
-    // Exposes the Room Flow to the ViewModel so UI can react to local DB changes.
     fun getUserFlow() = userDao.getUserFlow()
 
-    // Registers a new user with email/password in Firebase Auth.
     suspend fun registerUser(email: String, pass: String, name: String): Result<String> =
         withContext(Dispatchers.IO) {
             try {
-                // 1) Create Firebase Auth user
                 val authResult = auth.createUserWithEmailAndPassword(email, pass).await()
                 val firebaseUser = authResult.user ?: throw Exception("Error while creating user.")
 
-                // 2) Update Firebase profile display name
                 val profileUpdates = userProfileChangeRequest {
                     displayName = name
                 }
 
                 firebaseUser.updateProfile(profileUpdates).await()
-
-                // 3) Send email verification
                 firebaseUser.sendEmailVerification().await()
 
-                // 4) Create local user entity with defaults
                 val newUser = User(
                     id = firebaseUser.uid,
                     email = email,
@@ -72,11 +70,8 @@ class UserRepository(
                     currentXp = 0
                 )
 
-                // 5) Enforce "single user stored locally" model: wipe and insert
                 userDao.deleteAllUsers()
                 userDao.insertUser(newUser)
-
-                // 6) Push local state to the cloud
                 syncLocalToCloud(newUser.id)
 
                 return@withContext Result.success(
@@ -84,7 +79,6 @@ class UserRepository(
                 )
 
             } catch (e: FirebaseAuthUserCollisionException) {
-                // Firebase throws this when the email already exists
                 return@withContext Result.failure(Exception("This email is already associated with another account."))
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -92,17 +86,12 @@ class UserRepository(
             }
         }
 
-    // Uploads local Room data (user profile + fleet) to Firebase Realtime Database.
     suspend fun syncLocalToCloud(userId: String) {
         withContext(Dispatchers.IO) {
             try {
-                // Load local user; if missing, nothing to sync
                 val user = userDao.getUserById(userId) ?: return@withContext
-
-                // Cloud reference: /users/{uid}
                 val userRef = database.getReference("users").child(user.id)
 
-                // Build a JSON-like map structure matching the desired Realtime DB schema.
                 val userData = mapOf(
                     "profile" to mapOf(
                         "info" to mapOf(
@@ -129,7 +118,6 @@ class UserRepository(
                             "totalShotsHit" to user.totalShotsHit
                         )
                     ),
-                    // Fleet is stored as a list of ship maps under /users/{uid}/fleet
                     "fleet" to fleetDao.getUserFleet(userId).map { ship ->
                         mapOf(
                             "shipId" to ship.shipId,
@@ -142,7 +130,6 @@ class UserRepository(
                     "lastSyncTimestamp" to System.currentTimeMillis()
                 )
 
-                // Merge the data into the cloud record
                 userRef.updateChildren(userData).await()
                 Log.d("UserRepository", "Cloud Sync completed for ${user.id}")
 
@@ -152,7 +139,6 @@ class UserRepository(
         }
     }
 
-    // Send a Firebase password reset email
     suspend fun resetPassword(email: String): Result<String> = withContext(Dispatchers.IO) {
         return@withContext try {
             val cleanEmail = email.trim().lowercase()
@@ -171,7 +157,6 @@ class UserRepository(
         }
     }
 
-    // Checks whether the email corresponds to a password-based account.
     private suspend fun checkEmailEligibility(email: String): Boolean =
         suspendCancellableCoroutine { continuation ->
             val query = database.getReference("users")
@@ -204,16 +189,13 @@ class UserRepository(
             })
         }
 
-    // Logs in using Firebase Auth (email/password), then pulls the full profile + fleet
     suspend fun loginUser(email: String, pass: String): Result<String> =
         withContext(Dispatchers.IO) {
             try {
-                // 1) Firebase Auth login
                 val authResult = auth.signInWithEmailAndPassword(email, pass).await()
                 val firebaseUser = authResult.user ?: throw Exception("Auth failed: User not found.")
                 val uid = firebaseUser.uid
 
-                // 2) Fetch full user record from Realtime Database
                 val userRef = database.getReference("users").child(uid)
                 val snapshot = userRef.get().await()
 
@@ -221,7 +203,6 @@ class UserRepository(
                     throw Exception("User profile not found in database.")
                 }
 
-                // 3) Parse JSON snapshot into a local User entity
                 val profile = snapshot.child("profile")
                 val info = profile.child("info")
                 val progression = profile.child("progression")
@@ -255,7 +236,6 @@ class UserRepository(
                     sessionToken = null
                 )
 
-                // 4) Parse fleet snapshot into Room entity SavedShip
                 val fleetSnapshot = snapshot.child("fleet")
                 val fleetList = mutableListOf<SavedShip>()
 
@@ -272,7 +252,6 @@ class UserRepository(
                     fleetList.add(ship)
                 }
 
-                // 5) Overwrite local state
                 userDao.deleteAllUsers()
                 userDao.insertUser(fetchedUser)
 
@@ -287,7 +266,6 @@ class UserRepository(
             }
         }
 
-    // Deletes the account across Firebase DB, Auth, and Local Room DB
     suspend fun deleteAccount(user: User): Result<String> {
         return try {
             val userRef = database.getReference("users").child(user.id)
@@ -308,11 +286,8 @@ class UserRepository(
         }
     }
 
-    // UPDATED: Now adds the friend directly with status "accepted" immediately.
-    // It creates a bidirectional link (Sender -> Target AND Target -> Sender).
     suspend fun sendFriendRequest(sender: User, targetId: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // 1. Check if the target ID exists in Firebase
             val targetRef = database.getReference("users").child(targetId)
             val snapshot = targetRef.get().await()
 
@@ -320,12 +295,9 @@ class UserRepository(
                 return@withContext Result.failure(Exception("Player's ID '$targetId' does not exist."))
             }
 
-            // 2. Get target details for the sender's list
             val targetName = snapshot.child("profile/info/name").getValue(String::class.java) ?: "Unknown Sailor"
             val timestamp = System.currentTimeMillis()
 
-            // 3. Write to Firebase (Sender's friend list -> Target ID)
-            // Status is "accepted" immediately.
             val friendDataForSender = mapOf(
                 "name" to targetName,
                 "status" to "accepted",
@@ -339,7 +311,6 @@ class UserRepository(
                 .setValue(friendDataForSender)
                 .await()
 
-            // 4. Write to Firebase (Target's friend list -> Sender ID) - Reciprocal
             val friendDataForTarget = mapOf(
                 "name" to sender.name,
                 "status" to "accepted",
@@ -353,7 +324,6 @@ class UserRepository(
                 .setValue(friendDataForTarget)
                 .await()
 
-            // 5. Save the friend locally in Room so it appears in the UI immediately
             val localFriend = FriendEntity(
                 id = targetId,
                 name = targetName,
@@ -370,9 +340,6 @@ class UserRepository(
     }
 
     fun getLeaderboard(): Flow<List<RankingPlayer>> = callbackFlow {
-        // 1. Point to the "users" node
-        // 2. Sort upon the "totalScore" parameter
-        // 3. Retrieve the last 25 (the higher amount of points is on the bottom)
         val query = database.getReference("users")
             .orderByChild("profile/ranking/totalScore")
             .limitToLast(25)
@@ -381,19 +348,17 @@ class UserRepository(
             override fun onDataChange(snapshot: DataSnapshot) {
                 val tempList = mutableListOf<RankingPlayer>()
 
-                // Firebase returns the data in ascending order (0 -> 100 -> 1000)
                 for (child in snapshot.children) {
                     val uid = child.key ?: ""
 
                     val name = child.child("profile/info/name").getValue(String::class.java)
-                        ?: child.child("name").getValue(String::class.java) // Fallback root
+                        ?: child.child("name").getValue(String::class.java)
                         ?: "Unknown Sailor"
 
                     val countryCode = child.child("profile/info/countryCode").getValue(String::class.java) ?: "IT"
                     val avatarUrl = child.child("profile/info/profilePictureUrl").getValue(String::class.java)
                     val scoreLong = child.child("profile/ranking/totalScore").getValue(Long::class.java) ?: 0L
 
-                    // Adjust the format removing commas (es. 10.000)
                     val formattedScore = String.format("%,d", scoreLong).replace(',', '.')
 
                     tempList.add(
@@ -422,5 +387,67 @@ class UserRepository(
 
         query.addValueEventListener(listener)
         awaitClose { query.removeEventListener(listener) }
+    }
+
+
+
+    private suspend fun updateUserStatistics(userId: String, isVictory: Boolean, shotsFired: Long, shotsHit: Long) {
+        val user = userDao.getUserById(userId) ?: return
+
+        // 1. XP Calculation: If you win, you gain 10 points (or your preferred logic)
+        val xpEarned = if (isVictory) 10 else 0
+        val newXp = user.currentXp + xpEarned
+
+        // 2. Update the User object
+        // IMPORTANT: Here we set totalScore equal to newXp
+        val updatedUser = user.copy(
+            wins = if (isVictory) user.wins + 1 else user.wins,
+            losses = if (!isVictory) user.losses + 1 else user.losses,
+
+            currentXp = newXp,          // Update XP
+            totalScore = newXp.toLong(),
+
+            totalShotsFired = user.totalShotsFired + shotsFired,
+            totalShotsHit = user.totalShotsHit + shotsHit,
+            lastUpdated = System.currentTimeMillis(),
+            lastWinTimestamp = if (isVictory) System.currentTimeMillis() else user.lastWinTimestamp
+        )
+
+        // 3. Save to local database
+        userDao.updateUser(updatedUser)
+
+        // 4. Sync with Cloud (Firebase)
+        // The syncLocalToCloud function will take the updated 'totalScore' and send it to the leaderboard
+        syncLocalToCloud(userId)
+    }
+    suspend fun saveMatchRecord(
+        userId: String,
+        opponentName: String,
+        isVictory: Boolean,
+        difficulty: String,
+        moves: List<MoveLog>
+    ) {
+        withContext(Dispatchers.IO) {
+            val userMoves = moves.filter { it.playerId == userId }
+            val hits = userMoves.count { it.result == "HIT" || it.result == "SUNK" }
+            val misses = userMoves.count { it.result == "MISS" }
+            val total = userMoves.size
+            val accuracy = if (total > 0) (hits.toFloat() / total) * 100f else 0f
+
+            val matchResult = MatchResult(
+                player1Id = userId,
+                opponentName = opponentName,
+                isVictory = isVictory,
+                difficulty = difficulty,
+                totalMoves = total,
+                totalHits = hits,
+                totalMisses = misses,
+                accuracy = accuracy
+            )
+
+            matchDao.saveFullMatch(matchResult, moves)
+
+            updateUserStatistics(userId, isVictory, total.toLong(), hits.toLong())
+        }
     }
 }

@@ -7,6 +7,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.example.brave_sailors.data.local.database.entity.MatchResult
+import com.example.brave_sailors.data.local.database.entity.MoveLog
 import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.data.local.database.entity.FriendEntity
 import kotlinx.coroutines.flow.Flow
@@ -51,7 +53,6 @@ interface UserDao {
     // --- SECURITY / SESSION MANAGEMENT ---
 
     // Clears all local users.
-    // REQUIRED: use on logout or when a session conflict happens to wipe local identity data.
     @Query("DELETE FROM users")
     suspend fun deleteAllUsers()
 
@@ -96,7 +97,6 @@ interface FleetDao {
     suspend fun getUserFleet(userId: String): List<SavedShip>
 
     // Saves a list of ships to the local DB.
-    // REPLACE updates existing rows (same primary key) and inserts missing ones.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveFleet(ships: List<SavedShip>)
 
@@ -124,4 +124,31 @@ interface FriendDao {
 
     @Query("SELECT * FROM friends")
     fun getAllFriendsFlow(): Flow<List<FriendEntity>>
+}
+
+@Dao
+interface MatchDao {
+
+    @Insert
+    suspend fun insertMatch(match: MatchResult): Long // Returns the generated ID
+
+    @Insert
+    suspend fun insertMoves(moves: List<MoveLog>)
+
+    // Save everything together in a single transaction
+    @Transaction
+    suspend fun saveFullMatch(match: MatchResult, moves: List<MoveLog>) {
+        val matchId = insertMatch(match)
+        // Update the match ID in the moves (since matchId is auto-generated)
+        val movesWithId = moves.map { it.copy(matchId = matchId) }
+        insertMoves(movesWithId)
+    }
+
+    // Get the user's match history
+    @Query("SELECT * FROM match_history WHERE player1Id = :userId ORDER BY timestamp DESC")
+    fun getMatchHistory(userId: String): Flow<List<MatchResult>>
+
+    // Get details (moves) of a specific match
+    @Query("SELECT * FROM move_logs WHERE matchId = :matchId ORDER BY turnNumber ASC")
+    suspend fun getMovesForMatch(matchId: Long): List<MoveLog>
 }
