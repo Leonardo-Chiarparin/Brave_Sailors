@@ -114,6 +114,7 @@ fun Profile(viewModel: ProfileViewModel) {
     val flagList = viewModel.flagList.collectAsState()
     val availableFlags = flagList.value
 
+    // [ DATA ]: Observe the user state to get dynamic stats
     val user by viewModel.userState.collectAsState()
 
     val scale = RememberScaleConversion()
@@ -313,21 +314,23 @@ fun Profile(viewModel: ProfileViewModel) {
                             contentAlignment = Alignment.TopCenter
                         ) {
                             val currentFlag = remember(user?.countryCode) {
-                                availableFlags.find { it.code == user?.countryCode } ?: availableFlags.first()
+                                availableFlags.find { it.code == user?.countryCode } ?: availableFlags.firstOrNull()
                             }
 
-                            Image(
-                                painter = rememberAsyncImagePainter(
-                                    model = ImageRequest.Builder(LocalContext.current)
-                                        .data(currentFlag.flagUrl)
-                                        .build()
-                                ),
-                                contentDescription = currentFlag.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .width(scale.dp(168f))
-                                    .fillMaxHeight()
-                            )
+                            if (currentFlag != null) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(currentFlag.flagUrl)
+                                            .build()
+                                    ),
+                                    contentDescription = currentFlag.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .width(scale.dp(168f))
+                                        .fillMaxHeight()
+                                )
+                            }
                         }
                     }
 
@@ -510,9 +513,9 @@ fun Profile(viewModel: ProfileViewModel) {
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // [ TO - DO ]: Substitute the static values inside the following printings
+                                    // [ FIX ]: Used dynamic wins/losses from user state
                                     Text(
-                                        "WON\t\t\t0",
+                                        "WON\t\t\t${user?.wins ?: 0}",
                                         color = White,
                                         textAlign = TextAlign.Center,
                                         fontSize = scale.sp(18f),
@@ -538,7 +541,7 @@ fun Profile(viewModel: ProfileViewModel) {
                                     )
 
                                     Text(
-                                        "LOST\t\t\t0",
+                                        "LOST\t\t\t${user?.losses ?: 0}",
                                         color = White,
                                         textAlign = TextAlign.Center,
                                         fontSize = scale.sp(18f),
@@ -972,7 +975,7 @@ fun Match(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // [ TO - DO ]: Substitute the static values inside the following printings
+                                    // [ FIX ]: These are already dynamic in your Match code
                                     Text(
                                         "WON\t\t\t$wins",
                                         color = White,

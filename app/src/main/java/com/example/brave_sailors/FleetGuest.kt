@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,7 +30,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,24 +45,40 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.brave_sailors.model.FleetGuestViewModel
+import com.example.brave_sailors.model.FleetGuestViewModelFactory
+import com.example.brave_sailors.model.ShipOrientation
 import com.example.brave_sailors.ui.components.BeginButton
+import com.example.brave_sailors.ui.components.ColoredShipBlock
 import com.example.brave_sailors.ui.components.DialogDeployment
+import com.example.brave_sailors.ui.components.ExactDraggableShipItem
 import com.example.brave_sailors.ui.components.FleetButton
 import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.components.GridLinesOverlay
 import com.example.brave_sailors.ui.components.ReturnButton
+import com.example.brave_sailors.ui.components.ShipDrawing
 import com.example.brave_sailors.ui.theme.DarkGrey
 import com.example.brave_sailors.ui.theme.DeepBlue
+import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
 
 @Composable
 fun FleetGuestScreen(
@@ -78,23 +97,26 @@ private fun Modal(
 ) {
     val scale = RememberScaleConversion()
     val scope = rememberCoroutineScope()
-
-    // val density = LocalDensity.current
+    val density = LocalDensity.current
 
     val cellSize = scale.dp(64f)
-
     val maxWidth = scale.dp(720f)
 
+    // --- USO IL GUEST VIEWMODEL ---
+    val viewModel: FleetGuestViewModel = viewModel(
+        factory = FleetGuestViewModelFactory()
+    )
+
+    val state by viewModel.state.collectAsState()
     val snackBarHostState = remember { SnackbarHostState() }
 
-    /*
-        var boardOffset by remember { mutableStateOf(Offset.Unspecified) }
-        var boardCellPx by remember { mutableFloatStateOf(0f) }
-     */
+    // Variabili di stato locale per Drag & Drop
+    var dragState by remember { mutableStateOf(DragState()) }
+    var boardOffset by remember { mutableStateOf(Offset.Unspecified) }
+    var boardCellPx by remember { mutableFloatStateOf(0f) }
 
     var buttonsVisible by remember { mutableStateOf(false) }
-
-    var showDialogDeployment by remember { mutableStateOf(false) }
+    var showDialogDeployment by remember { mutableStateOf(true) }
 
     fun triggerExit(callback: () -> Unit) {
         scope.launch {
@@ -102,10 +124,6 @@ private fun Modal(
             delay(200)
             callback()
         }
-    }
-
-    LaunchedEffect(Unit) {
-        showDialogDeployment = true
     }
 
     Box(
@@ -129,6 +147,7 @@ private fun Modal(
                 verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.Center
             ) {
+                // COLONNA NUMERI
                 Column(
                     modifier = Modifier
                         .width(scale.dp(28f))
@@ -154,7 +173,9 @@ private fun Modal(
                                 fontWeight = FontWeight.Medium,
                                 letterSpacing = scale.sp(2f),
                                 style = TextStyle(
-                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    ),
                                     lineHeightStyle = LineHeightStyle(
                                         alignment = LineHeightStyle.Alignment.Center,
                                         trim = LineHeightStyle.Trim.Both
@@ -170,6 +191,7 @@ private fun Modal(
                     }
                 }
 
+                // COLONNA GRIGLIA + LETTERE
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -196,7 +218,9 @@ private fun Modal(
                                     fontWeight = FontWeight.Medium,
                                     letterSpacing = scale.sp(2f),
                                     style = TextStyle(
-                                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                        platformStyle = PlatformTextStyle(
+                                            includeFontPadding = false
+                                        ),
                                         lineHeightStyle = LineHeightStyle(
                                             alignment = LineHeightStyle.Alignment.Center,
                                             trim = LineHeightStyle.Trim.Both
@@ -212,6 +236,7 @@ private fun Modal(
                         }
                     }
 
+                    // BOX GRIGLIA
                     Box(
                         modifier = Modifier
                             .padding(scale.dp(2f) / 2)
@@ -227,17 +252,48 @@ private fun Modal(
                     ) {
                         Box(
                             modifier = Modifier
-                                /*
-                                    .onGloballyPositioned { coordinates ->
-                                        boardOffset = coordinates.positionInWindow()
-                                        boardCellPx = with(density) { cellSize.toPx() }
-                                    }
-                                */
+                                .onGloballyPositioned { coordinates ->
+                                    boardOffset = coordinates.positionInWindow()
+                                    boardCellPx = with(density) { cellSize.toPx() }
+                                }
                                 .size(cellSize * GRID_SIZE)
                         ) {
-                            // -- PREVIEW --
+                            // -- PREVIEW (GHOST SHIP) --
+                            val preview = state.placementPreview
+                            if (preview != null) {
+                                val colorRaw = if (preview.isValid) PREVIEW_OK else PREVIEW_BAD
+                                val previewColor = colorRaw.copy(alpha = 0.25f)
 
-                            // -- PLACEMENT --
+                                val (row, col) = preview.coordinates.firstOrNull() ?: (0 to 0)
+                                val isHorizontal = state.currentOrientation == ShipOrientation.HORIZONTAL
+
+                                val shipSize = if (dragState.isDragging && dragState.draggedShipSize > 0) {
+                                    dragState.draggedShipSize
+                                } else {
+                                    state.draggedShipSize ?: 1
+                                }
+
+                                val w = if (isHorizontal) cellSize * shipSize else cellSize
+                                val h = if (isHorizontal) cellSize else cellSize * shipSize
+
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = cellSize * col, y = cellSize * row)
+                                        .size(w, h)
+                                ) {
+                                    ColoredShipBlock(
+                                        cellSize,
+                                        shipSize = shipSize,
+                                        isHorizontal = isHorizontal,
+                                        previewColor = previewColor
+                                    )
+                                }
+                            }
+
+                            // -- NAVI PIAZZATE --
+                            state.placedShips.forEach { ship ->
+                                ShipDrawing(ship, cellSize)
+                            }
 
                             GridLinesOverlay(GRID_SIZE, cellSize)
                         }
@@ -245,12 +301,13 @@ private fun Modal(
                 }
             }
 
-            // If the user has placed all the ships on the grid, then the space between the grid and buttons should be expanded as follows
-            // if (state.shipsToPlace.isNotEmpty())
+            // SPAZIO DINAMICO
+            if (state.shipsToPlace.isNotEmpty())
                 Spacer(Modifier.height(scale.dp(60f)))
-            // else
-            //    Spacer(Modifier.height(scale.dp(102f)))
+            else
+                Spacer(Modifier.height(scale.dp(102f)))
 
+            // --- BOTTONI CENTRALI (AUTO / RESET) ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth(),
@@ -262,7 +319,7 @@ private fun Modal(
                     paddingV = 24f,
                     text = "AUTO",
                     enabled = true,
-                    onClick = {  }
+                    onClick = { viewModel.autoPlaceFleet() }
                 )
 
                 Spacer(modifier = Modifier.width(scale.dp(168f)))
@@ -271,13 +328,14 @@ private fun Modal(
                     paddingH = 28f,
                     paddingV = 24f,
                     text = "RESET",
-                    enabled = true, // state.placedShips.isNotEmpty()
-                    onClick = {  } // onReset
+                    enabled = state.placedShips.isNotEmpty(),
+                    onClick = { viewModel.onReset() }
                 )
             }
 
             Spacer(Modifier.height(scale.dp(28f)))
 
+            // --- BOTTONE PIVOT ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth(),
@@ -288,18 +346,19 @@ private fun Modal(
                     paddingH = 28f,
                     paddingV = 24f,
                     text = "PIVOT",
-                    enabled = true, // dragState.isDragging
-                    onClick = {  } // onRotate
+                    enabled = dragState.isDragging || state.shipsToPlace.isNotEmpty(),
+                    onClick = { viewModel.onRotate() }
                 )
             }
         }
 
-        // If the guest has placed all the ships on the grid, then the "DeepBlue" section must be hidden
-        // if (state.shipsToPlace.isNotEmpty()) {
+        // --- DRAWER INVENTARIO (NAVI DA PIAZZARE) ---
+        // Visibile solo se ci sono navi rimaste
+        if (state.shipsToPlace.isNotEmpty()) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = scale.dp(20f + 188f))
+                    .padding(bottom = scale.dp(34f + 188f))
                     .fillMaxWidth()
                     .background(DeepBlue)
                     .drawBehind {
@@ -310,7 +369,6 @@ private fun Modal(
                         val halfStroke = stroke / 2f
 
                         drawLine(White, Offset(0f, halfStroke), Offset(w, halfStroke), stroke)
-
                         drawLine(White, Offset(0f, h - halfStroke), Offset(w, h - halfStroke), stroke)
                     }
                     .padding(vertical = scale.dp(26f), horizontal = scale.dp(32f)),
@@ -334,15 +392,69 @@ private fun Modal(
                                 .padding(vertical = scale.dp(62f)),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            // groupedShips
+                            // Raggruppamento navi per tipo
+                            val groupedShips = state.shipsToPlace
+                                .groupingBy { it }
+                                .eachCount()
+                                .toSortedMap(reverseOrder())
 
-                            // ExactDraggableShipItem
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(scale.dp(26f)),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                groupedShips.keys.forEach { size ->
+                                    val count = groupedShips[size] ?: 0
+
+                                    // Componente trascinabile
+                                    ExactDraggableShipItem(
+                                        cellSize = cellSize,
+                                        shipSize = size,
+                                        count = count,
+                                        boardOffset = boardOffset,
+                                        boardCellPx = boardCellPx,
+                                        isVertical = state.currentOrientation == ShipOrientation.VERTICAL,
+                                        onDragStart = { grabOffset ->
+                                            viewModel.onDragStart(size)
+
+                                            if (state.currentOrientation == ShipOrientation.VERTICAL) {
+                                                viewModel.onRotate()
+                                            }
+
+                                            dragState = dragState.copy(
+                                                isDragging = true,
+                                                draggedShipSize = size,
+                                                grabOffset = grabOffset
+                                            )
+                                        },
+                                        onDragOffsetUpdate = { offset ->
+                                            dragState = dragState.copy(currentDragOffset = offset)
+                                        },
+                                        onDragCell = { r, c ->
+                                            viewModel.onDragHover(r, c, size)
+                                        },
+                                        onDragExit = { viewModel.onDragEnd() },
+                                        onDragFinished = {
+                                            viewModel.onDragEnd()
+                                            dragState = dragState.copy(isDragging = false)
+                                        },
+                                        onDrop = { r, c ->
+                                            viewModel.onDropShip(r, c, size)
+                                            if (state.currentOrientation == ShipOrientation.VERTICAL) {
+                                                viewModel.onRotate()
+                                            }
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
-        // }
+        }
 
+        // --- BOTTONI NAVIGAZIONE (RETURN / BEGIN) ---
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -350,8 +462,7 @@ private fun Modal(
                 .fillMaxWidth()
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom
             ) {
@@ -374,21 +485,48 @@ private fun Modal(
                     BeginButton(
                         text = "BEGIN",
                         onClick = {
-                            onStartMatch(firingRule)
+                            if (viewModel.submitGuestFleet()) {
+                                onStartMatch(firingRule)
+                            }
                         }
                     )
                 }
             }
         }
 
-        // --- GHOST SHIP OVERLAY (WHILE DRAGGING) ---
+        // --- GHOST SHIP OVERLAY (SEGUONO IL DITO) ---
+        if (dragState.isDragging && dragState.draggedShipSize > 0) {
+            val shipSize = dragState.draggedShipSize
+            val offsetPx = dragState.currentDragOffset
+
+            val isHorizontal = state.currentOrientation == ShipOrientation.HORIZONTAL
+
+            val (w, h) = with(density) {
+                if (isHorizontal) (cellSize * shipSize).toPx() to cellSize.toPx()
+                else cellSize.toPx() to (cellSize * shipSize).toPx()
+            }
+
+            val xOffset = offsetPx.x - (w / 2f)
+            val yOffset = offsetPx.y - (h / 2f)
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset { IntOffset(xOffset.roundToInt(), yOffset.roundToInt()) }
+                    .size(width = with(density) { w.toDp() }, height = with(density) { h.toDp() })
+                    .zIndex(1f)
+                    .graphicsLayer()
+            ) {
+                ColoredShipBlock(cellSize, shipSize = shipSize, isHorizontal = isHorizontal)
+            }
+        }
 
         SnackbarHost(
             hostState = snackBarHostState,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 
-        // -- DIALOGS --
+        // --- DIALOGO INIZIALE (DEPLOYMENT) ---
         if (showDialogDeployment) {
             DialogDeployment(
                 onConfirm = {

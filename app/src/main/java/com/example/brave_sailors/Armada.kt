@@ -86,7 +86,7 @@ val SHIP_COLORS = mapOf(
 )
 val DEFAULT_SHIP_COLOR = Orange
 
-private data class DragState(
+public data class DragState(
     val isDragging: Boolean = false,
     val draggedShipSize: Int = 0,
     val currentDragOffset: Offset = Offset.Zero,
