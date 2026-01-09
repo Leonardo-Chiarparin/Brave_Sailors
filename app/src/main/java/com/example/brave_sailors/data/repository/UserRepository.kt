@@ -4,11 +4,9 @@ import android.util.Log
 import com.example.brave_sailors.data.local.database.FleetDao
 import com.example.brave_sailors.data.local.database.FriendDao
 import com.example.brave_sailors.data.local.database.UserDao
-// --- NEW IMPORTS ADDED ---
 import com.example.brave_sailors.data.local.database.MatchDao
 import com.example.brave_sailors.data.local.database.entity.MatchResult
 import com.example.brave_sailors.data.local.database.entity.MoveLog
-// -----------------------------
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -24,7 +22,10 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -41,9 +42,15 @@ class UserRepository(
 ) {
 
     private val database = FirebaseDatabase.getInstance()
+    // [ LOGIC ]: Scope for background database operations within listeners
+    private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    // [ LOGIC ]: Returns a flow of the current user from local database
     fun getUserFlow() = userDao.getUserFlow()
 
+    /**
+     * Registers a new user, updates Firebase profile, and initializes cloud/local data.
+     */
     suspend fun registerUser(email: String, pass: String, name: String): Result<String> =
         withContext(Dispatchers.IO) {
             try {
@@ -86,12 +93,19 @@ class UserRepository(
             }
         }
 
+    /**
+     * Synchronizes current user's profile and fleet data to Firebase.
+     */
     suspend fun syncLocalToCloud(userId: String) {
         withContext(Dispatchers.IO) {
             try {
                 val user = userDao.getUserById(userId) ?: return@withContext
                 val userRef = database.getReference("users").child(user.id)
 
+                if (user.wins == 0 && user.losses == 0 && user.currentXp == 0) {
+                    Log.w("UserRepository", "Prevented sync of empty local data for user: ${user.id}")
+                    return@withContext
+                }
                 val userData = mapOf(
                     "profile" to mapOf(
                         "info" to mapOf(
@@ -139,6 +153,9 @@ class UserRepository(
         }
     }
 
+    /**
+     * Sends a password reset email if account eligibility is confirmed.
+     */
     suspend fun resetPassword(email: String): Result<String> = withContext(Dispatchers.IO) {
         return@withContext try {
             val cleanEmail = email.trim().lowercase()
@@ -157,6 +174,9 @@ class UserRepository(
         }
     }
 
+    /**
+     * Checks if email belongs to a password-based user account.
+     */
     private suspend fun checkEmailEligibility(email: String): Boolean =
         suspendCancellableCoroutine { continuation ->
             val query = database.getReference("users")
@@ -189,6 +209,9 @@ class UserRepository(
             })
         }
 
+    /**
+     * Logs in the user, parses profile/fleet, and initializes the live friends name observer.
+     */
     suspend fun loginUser(email: String, pass: String): Result<String> =
         withContext(Dispatchers.IO) {
             try {
@@ -216,29 +239,23 @@ class UserRepository(
                     googleName = info.child("googleName").getValue(String::class.java) ?: "",
                     googlePhotoUrl = info.child("profilePictureUrl").getValue(String::class.java),
                     countryCode = info.child("countryCode").getValue(String::class.java) ?: "IT",
-                    lastUpdated = info.child("lastUpdated").getValue(Long::class.java)
-                        ?: System.currentTimeMillis(),
-
+                    lastUpdated = info.child("lastUpdated").getValue(Long::class.java) ?: System.currentTimeMillis(),
                     level = progression.child("level").getValue(Int::class.java) ?: 1,
                     currentXp = progression.child("currentXp").getValue(Int::class.java) ?: 0,
-                    lastWinTimestamp = progression.child("lastWinTimestamp")
-                        .getValue(Long::class.java) ?: 0L,
-
+                    lastWinTimestamp = progression.child("lastWinTimestamp").getValue(Long::class.java) ?: 0L,
                     totalScore = ranking.child("totalScore").getValue(Long::class.java) ?: 0,
-
                     wins = stats.child("wins").getValue(Int::class.java) ?: 0,
                     losses = stats.child("losses").getValue(Int::class.java) ?: 0,
                     shipsDestroyed = stats.child("shipsDestroyed").getValue(Int::class.java) ?: 0,
                     totalShotsFired = stats.child("totalShotsFired").getValue(Long::class.java) ?: 0,
                     totalShotsHit = stats.child("totalShotsHit").getValue(Long::class.java) ?: 0,
-
                     profilePictureUrl = info.child("profilePictureUrl").getValue(String::class.java),
                     sessionToken = null
                 )
 
+                // [ LOGIC ]: Sync fleet from cloud to local
                 val fleetSnapshot = snapshot.child("fleet")
                 val fleetList = mutableListOf<SavedShip>()
-
                 for (shipSnap in fleetSnapshot.children) {
                     val ship = SavedShip(
                         userId = uid,
@@ -246,8 +263,7 @@ class UserRepository(
                         size = (shipSnap.child("size").value as? Number)?.toInt() ?: 1,
                         row = (shipSnap.child("row").value as? Number)?.toInt() ?: 0,
                         col = (shipSnap.child("col").value as? Number)?.toInt() ?: 0,
-                        isHorizontal = shipSnap.child("isHorizontal").getValue(Boolean::class.java)
-                            ?: true
+                        isHorizontal = shipSnap.child("isHorizontal").getValue(Boolean::class.java) ?: true
                     )
                     fleetList.add(ship)
                 }
@@ -259,6 +275,9 @@ class UserRepository(
                     fleetDao.saveFleet(fleetList)
                 }
 
+                // [ LOGIC ]: Start observing friends changes in real-time to populate local DB
+                observeFriendsLive(uid)
+
                 return@withContext Result.success("Login successful! Data synchronized.")
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -266,6 +285,55 @@ class UserRepository(
             }
         }
 
+    /**
+     * Attaches live listeners to each friend's profile to update names locally
+     * as soon as they change their username on their own account.
+     */
+    fun observeFriendsLive(currentUserId: String) {
+        val friendsRef = database.getReference("users").child(currentUserId).child("friends")
+
+        friendsRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                for (friendSnap in snapshot.children) {
+                    val friendId = friendSnap.key ?: continue
+                    val status = friendSnap.child("status").getValue(String::class.java) ?: "ACCEPTED"
+                    val timestamp = friendSnap.child("timestamp").getValue(Long::class.java) ?: 0L
+
+                    // [ LOGIC ]: Listen to the friend's official profile name node to catch updates
+                    database.getReference("users")
+                        .child(friendId)
+                        .child("profile/info/name")
+                        .addValueEventListener(object : ValueEventListener {
+                            override fun onDataChange(nameSnapshot: DataSnapshot) {
+                                val currentName = nameSnapshot.getValue(String::class.java) ?: "Unknown Sailor"
+
+                                repositoryScope.launch {
+                                    val updatedFriend = FriendEntity(
+                                        id = friendId,
+                                        name = currentName,
+                                        status = status.uppercase(),
+                                        timestamp = timestamp
+                                    )
+                                    // [ LOGIC ]: Room INSERT handles the sync between Firebase and Local DB
+                                    friendDao.insertFriend(updatedFriend)
+                                    Log.d("UserRepository", "Friend data synced/updated live: $currentName")
+                                }
+                            }
+                            override fun onCancelled(error: DatabaseError) {
+                                Log.e("UserRepository", "Friend name listener cancelled: ${error.message}")
+                            }
+                        })
+                }
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("UserRepository", "Friends list listener cancelled: ${error.message}")
+            }
+        })
+    }
+
+    /**
+     * Deletes the account and associated data from cloud and local storage.
+     */
     suspend fun deleteAccount(user: User): Result<String> {
         return try {
             val userRef = database.getReference("users").child(user.id)
@@ -286,6 +354,9 @@ class UserRepository(
         }
     }
 
+    /**
+     * Establishes a bidirectional friendship between the sender and the target.
+     */
     suspend fun sendFriendRequest(sender: User, targetId: String): Result<String> = withContext(Dispatchers.IO) {
         try {
             val targetRef = database.getReference("users").child(targetId)
@@ -339,6 +410,9 @@ class UserRepository(
         }
     }
 
+    /**
+     * Observes and returns the real-time leaderboard ranking from Firebase.
+     */
     fun getLeaderboard(): Flow<List<RankingPlayer>> = callbackFlow {
         val query = database.getReference("users")
             .orderByChild("profile/ranking/totalScore")
@@ -389,22 +463,20 @@ class UserRepository(
         awaitClose { query.removeEventListener(listener) }
     }
 
-
-
+    /**
+     * Updates XP and match-related statistics for the specified user.
+     */
     private suspend fun updateUserStatistics(userId: String, isVictory: Boolean, shotsFired: Long, shotsHit: Long) {
         val user = userDao.getUserById(userId) ?: return
 
-        // 1. XP Calculation: If you win, you gain 10 points (or your preferred logic)
         val xpEarned = if (isVictory) 10 else 0
         val newXp = user.currentXp + xpEarned
 
-        // 2. Update the User object
-        // IMPORTANT: Here we set totalScore equal to newXp
         val updatedUser = user.copy(
             wins = if (isVictory) user.wins + 1 else user.wins,
             losses = if (!isVictory) user.losses + 1 else user.losses,
 
-            currentXp = newXp,          // Update XP
+            currentXp = newXp,
             totalScore = newXp.toLong(),
 
             totalShotsFired = user.totalShotsFired + shotsFired,
@@ -413,13 +485,13 @@ class UserRepository(
             lastWinTimestamp = if (isVictory) System.currentTimeMillis() else user.lastWinTimestamp
         )
 
-        // 3. Save to local database
         userDao.updateUser(updatedUser)
-
-        // 4. Sync with Cloud (Firebase)
-        // The syncLocalToCloud function will take the updated 'totalScore' and send it to the leaderboard
         syncLocalToCloud(userId)
     }
+
+    /**
+     * Records match history and statistics locally and triggers cloud synchronization.
+     */
     suspend fun saveMatchRecord(
         userId: String,
         opponentName: String,
@@ -446,8 +518,70 @@ class UserRepository(
             )
 
             matchDao.saveFullMatch(matchResult, moves)
-
             updateUserStatistics(userId, isVictory, total.toLong(), hits.toLong())
         }
+    }
+
+    /**
+     * Uploads the player's fleet configuration to the active match node in Firebase.
+     */
+    suspend fun uploadFleetToMatch(matchId: String, userId: String) = withContext(Dispatchers.IO) {
+        try {
+            val localFleet = fleetDao.getUserFleet(userId)
+            val fleetRef = database.getReference("matches").child(matchId).child("fleets").child(userId)
+
+            val fleetData = localFleet.map { ship ->
+                mapOf(
+                    "shipId" to ship.shipId,
+                    "size" to ship.size,
+                    "row" to ship.row,
+                    "col" to ship.col,
+                    "isHorizontal" to ship.isHorizontal
+                )
+            }
+
+            fleetRef.setValue(fleetData).await()
+            Log.d("UserRepository", "Fleet uploaded to match $matchId for user $userId")
+        } catch (e: Exception) {
+            Log.e("UserRepository", "Failed to upload fleet: ${e.message}")
+            throw e
+        }
+    }
+
+    /**
+     * Listens for the opponent's fleet to become available in the cloud match node.
+     */
+    fun listenForOpponentFleet(matchId: String, opponentId: String): Flow<List<SavedShip>> = callbackFlow {
+        val opponentFleetRef = database.getReference("matches")
+            .child(matchId)
+            .child("fleets")
+            .child(opponentId)
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (snapshot.exists()) {
+                    val ships = mutableListOf<SavedShip>()
+                    for (shipSnap in snapshot.children) {
+                        val ship = SavedShip(
+                            userId = opponentId,
+                            shipId = (shipSnap.child("shipId").value as? Number)?.toInt() ?: 0,
+                            size = (shipSnap.child("size").value as? Number)?.toInt() ?: 1,
+                            row = (shipSnap.child("row").value as? Number)?.toInt() ?: 0,
+                            col = (shipSnap.child("col").value as? Number)?.toInt() ?: 0,
+                            isHorizontal = shipSnap.child("isHorizontal").getValue(Boolean::class.java) ?: true
+                        )
+                        ships.add(ship)
+                    }
+                    trySend(ships)
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                close(error.toException())
+            }
+        }
+
+        opponentFleetRef.addValueEventListener(listener)
+        awaitClose { opponentFleetRef.removeEventListener(listener) }
     }
 }

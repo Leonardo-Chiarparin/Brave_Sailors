@@ -38,8 +38,7 @@ class ProfileViewModel(
 ) : ViewModel() {
 
     // -- User State (REACTIVE) --
-    // This connects directly to the local Room Database.
-    // When the user logs in or updates their profile, this flow emits the new data automatically.
+    // Observes the local Room Database through the repository
     val userState: StateFlow<User?> = userRepository.getUserFlow()
         .stateIn(
             scope = viewModelScope,
@@ -48,18 +47,15 @@ class ProfileViewModel(
         )
 
     // -- Leaderboard State --
-    // Holds the list of top 25 players fetched from Firebase Realtime Database.
     private val _leaderboard = MutableStateFlow<List<RankingPlayer>>(emptyList())
     val leaderboard = _leaderboard.asStateFlow()
 
-    // -- Helpers regarding countries --
     private val packageName = "com.example.brave_sailors"
 
     private fun localUri(resourceId: Int): String {
         return "android.resource://$packageName/$resourceId"
     }
 
-    // Default flags in case API fails
     private val fallbackFlags = listOf(
         Flag("Belgium", "BE", localUri(R.drawable.ic_flag_belgium)),
         Flag("China", "CN", localUri(R.drawable.ic_flag_china)),
@@ -86,16 +82,12 @@ class ProfileViewModel(
 
     init {
         fetchFlags()
-
-        // Start listening to the global leaderboard updates
         startLeaderboardSync()
 
-        // -- Session Monitor --
-        // Automatically starts observing session token when a user logs in (userState becomes non-null)
         viewModelScope.launch {
             userState.collectLatest { user ->
                 if (user != null && !user.sessionToken.isNullOrEmpty()) {
-                    startSessionObserver(user.id, user.sessionToken)
+                    startSessionObserver(user.id, user.sessionToken!!)
                 } else {
                     removeSessionListener()
                 }
@@ -103,9 +95,6 @@ class ProfileViewModel(
         }
     }
 
-    /**
-     * Starts observing the leaderboard data from the repository.
-     */
     private fun startLeaderboardSync() {
         viewModelScope.launch(Dispatchers.IO) {
             userRepository.getLeaderboard()
@@ -116,7 +105,7 @@ class ProfileViewModel(
     }
 
     /**
-     * Initializes the user session token.
+     * Initializes the user session token and updates both Cloud and Local DB.
      */
     fun initializeSession(user: User, isNewUser: Boolean, onComplete: (User) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -145,11 +134,9 @@ class ProfileViewModel(
     private fun fetchFlags() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                Log.d("ProfileViewModel", "Starting flags download...")
                 val flags = RetrofitClient.api.getFlags()
                 if (flags.isNotEmpty()) {
                     _flagList.value = flags.sortedBy { it.name }
-                    Log.d("ProfileViewModel", "Flags downloaded and sorted successfully.")
                 }
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "Error while fetching flags: ${e.message}")
@@ -158,16 +145,17 @@ class ProfileViewModel(
         }
     }
 
-    // NOTE: 'loadUser' is no longer needed because userState observes the DB automatically.
-    // We keep 'registerUser' just in case, but usually RegisterViewModel handles creation.
-    fun registerUser(user: User) {
+    /**
+     * Updates game-related stats (XP and Level) and syncs to cloud.
+     */
+    fun updateGameStats(id: String, level: Int, xp: Int, timestamp: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                userDao.insertUser(user)
-                userRepository.syncLocalToCloud(user.id)
-                Log.d("ProfileViewModel", "User registered and synced: ${user.id}")
+                userDao.updateGameStats(id, level, xp, timestamp)
+                userRepository.syncLocalToCloud(id)
+                Log.d("ProfileViewModel", "Stats updated: Level $level, XP $xp")
             } catch (e: Exception) {
-                Log.e("ProfileViewModel", "Error while inserting user: ${e.message}")
+                Log.e("ProfileViewModel", "Failed to update stats: ${e.message}")
             }
         }
     }
@@ -181,24 +169,18 @@ class ProfileViewModel(
             override fun onDataChange(snapshot: DataSnapshot) {
                 val serverToken = snapshot.child("sessionToken").getValue(String::class.java)
                 if (serverToken != null && serverToken != localToken) {
-                    Log.w("Session", "Session Conflict detected! Server: $serverToken vs Local: $localToken")
                     _forceLogoutEvent.value = true
                 }
             }
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("ProfileViewModel", "Database listen failed: ${error.message}")
-            }
+            override fun onCancelled(error: DatabaseError) {}
         }
         userRef.addValueEventListener(sessionListener!!)
     }
 
     fun performLocalLogout() {
         removeSessionListener()
-
         viewModelScope.launch(Dispatchers.IO) {
             userDao.deleteAllUsers()
-            // No need to manually set _userState to null, the Flow will do it automatically
-            // when the table becomes empty.
             withContext(Dispatchers.Main) {
                 _forceLogoutEvent.value = false
             }
@@ -207,9 +189,7 @@ class ProfileViewModel(
 
     private fun removeSessionListener() {
         if (sessionListener != null && monitoredUserId != null) {
-            database.getReference("users")
-                .child(monitoredUserId!!)
-                .removeEventListener(sessionListener!!)
+            database.getReference("users").child(monitoredUserId!!).removeEventListener(sessionListener!!)
             sessionListener = null
             monitoredUserId = null
         }
@@ -217,16 +197,12 @@ class ProfileViewModel(
 
     fun updateCountry(countryCode: String) {
         val currentUser = userState.value ?: return
-
         val updatedUser = currentUser.copy(countryCode = countryCode)
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // We update the DB. Room will emit the new value to 'userState'.
                 userDao.updateUser(updatedUser)
-                Log.d("ProfileViewModel", "Country has been changed to: $countryCode")
                 userRepository.syncLocalToCloud(updatedUser.id)
             } catch (e: Exception) {
-                Log.e("ProfileViewModel", "Error during update: ${e.message}")
                 e.printStackTrace()
             }
         }
@@ -235,12 +211,9 @@ class ProfileViewModel(
     fun updateName(newName: String) {
         val currentUser = userState.value ?: return
         if (newName.isNotBlank()) {
-            val updatedUser = currentUser.copy(name = newName)
             viewModelScope.launch(Dispatchers.IO) {
-                // Update Local DB
                 userDao.updateUserName(currentUser.id, newName)
-                // Sync Cloud
-                userRepository.syncLocalToCloud(updatedUser.id)
+                userRepository.syncLocalToCloud(currentUser.id)
             }
         }
     }
@@ -261,12 +234,7 @@ class ProfileViewModel(
                 }
                 withContext(Dispatchers.IO) {
                     userDao.updateProfilePicture(currentUser.id, filePath, updateTime)
-                    // We construct the object just for the Cloud Sync
-                    val updatedUser = currentUser.copy(
-                        profilePictureUrl = filePath,
-                        lastUpdated = updateTime
-                    )
-                    userRepository.syncLocalToCloud(updatedUser.id)
+                    userRepository.syncLocalToCloud(currentUser.id)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -277,48 +245,30 @@ class ProfileViewModel(
     fun resetPassword(email: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             val result = userRepository.resetPassword(email)
-
             withContext(Dispatchers.Main) {
-                result.onSuccess { message ->
-                    onResult(true, message) // Pass the success message
-                }.onFailure { error ->
-                    // Pass the error message (the one defined in the Repository)
-                    onResult(false, error.message ?: "Unknown error occurred.")
-                }
+                result.onSuccess { onResult(true, it) }
+                    .onFailure { onResult(false, it.message ?: "Error") }
             }
         }
     }
 
     fun deleteAccount(user: User, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            // Here we use 'userRepository' instead of 'repository'
             val result = userRepository.deleteAccount(user)
-            if (result.isSuccess) {
-                onResult(true)
-            } else {
-                onResult(false)
-            }
+            onResult(result.isSuccess)
         }
     }
 
     fun sendFriendRequest(targetId: String, onResult: (Boolean, String) -> Unit) {
         val currentUser = userState.value ?: return
-
-        // Prevent adding yourself
         if (targetId == currentUser.id) {
             onResult(false, "You cannot add your own ID!")
             return
         }
-
         viewModelScope.launch {
-            // This now calls the updated logic in Repository that adds the friend directly ("accepted")
             val result = userRepository.sendFriendRequest(currentUser, targetId)
-            result.onSuccess { message ->
-                onResult(true, message)
-            }.onFailure { error ->
-                // This will capture the "Player ID does not exist" message
-                onResult(false, error.message ?: "An unknown error occurred.")
-            }
+            result.onSuccess { onResult(true, it) }
+                .onFailure { onResult(false, it.message ?: "Error") }
         }
     }
 
@@ -331,8 +281,72 @@ class ProfileViewModel(
         )
         viewModelScope.launch(Dispatchers.IO) {
             userDao.updateUser(restoredUser)
-            Log.d("ProfileViewModel", "Profile restored to Google defaults")
             userRepository.syncLocalToCloud(restoredUser.id)
+        }
+    }
+
+    /**
+     * Specialized function for Training/Challenge rewards.
+     * Grants +5 XP and +5 Ranking Score.
+     */
+    fun addMiniGameWinReward(userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val user = userDao.getUserById(userId) ?: return@launch
+
+            // Increment XP and Ranking Total Score
+            val newXp = user.currentXp + 5
+            val newTotalScore = user.totalScore + 5L
+            val now = System.currentTimeMillis()
+
+            // Logic for Level Up (every 100 XP)
+            var currentLevel = user.level
+            var adjustedXp = newXp
+            if (adjustedXp >= 100) {
+                currentLevel += 1
+                adjustedXp -= 100
+            }
+
+            // Update user in local database to trigger UI update via Flow
+            val updatedUser = user.copy(
+                level = currentLevel,
+                currentXp = adjustedXp,
+                totalScore = newTotalScore,
+                lastWinTimestamp = now
+            )
+            userDao.updateUser(updatedUser)
+
+            // Sync with Firebase to update global leaderboard
+            userRepository.syncLocalToCloud(userId)
+
+            Log.d("ProfileViewModel", "Reward granted: +5 XP, +5 Score. New Score: $newTotalScore")
+        }
+    }
+
+    /**
+     * Calculates the cooldown for challenges.
+     * Uses userState.value directly as it is the StateFlow source.
+     */
+    fun getCooldownRemaining(): Long {
+        // Use userState.value directly
+        val user = userState.value ?: return 0L
+
+        // Handle potential null values and use Long for calculations to avoid ambiguity
+        val lastWin = user.lastWinTimestamp
+        val now = System.currentTimeMillis()
+        val cooldownPeriod = 3600000L // 1 hour
+
+        val remaining = (lastWin + cooldownPeriod) - now
+
+        return if (remaining > 0L) remaining else 0L
+    }
+
+    /**
+     * Updates the win timestamp to trigger cooldown.
+     */
+    fun updateChallengeCooldown(userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val now = System.currentTimeMillis()
+            userDao.updateLastWinTimestamp(userId, now)
         }
     }
 
@@ -342,7 +356,6 @@ class ProfileViewModel(
     }
 }
 
-// Factory (Kept compatible with the dependency injection)
 class ProfileViewModelFactory(
     private val userDao: UserDao,
     private val fleetDao: FleetDao,

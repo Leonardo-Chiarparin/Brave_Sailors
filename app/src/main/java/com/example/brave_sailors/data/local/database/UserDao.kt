@@ -82,6 +82,11 @@ interface UserDao {
     @Query("UPDATE users SET level = :level, currentXp = :xp, lastWinTimestamp = :timestamp WHERE id = :id")
     suspend fun updateGameStats(id: String, level: Int, xp: Int, timestamp: Long)
 
+    // Updates ONLY the last win timestamp.
+    // [ LOGIC ]: Used to trigger the cooldown timer for training/mini-games.
+    @Query("UPDATE users SET lastWinTimestamp = :timestamp WHERE id = :id")
+    suspend fun updateLastWinTimestamp(id: String, timestamp: Long)
+
     // Clears the session token (sets it to NULL) for the given user.
     // Typically called on logout or when the token is invalid/expired.
     @Query("UPDATE users SET sessionToken = NULL WHERE id = :userId")

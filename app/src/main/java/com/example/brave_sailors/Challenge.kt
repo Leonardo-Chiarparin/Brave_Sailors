@@ -32,8 +32,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.components.GoButton
 import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.theme.DarkBlue
@@ -59,6 +62,7 @@ import com.example.brave_sailors.ui.theme.LightBlue
 import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
+import kotlinx.coroutines.delay
 
 enum class OverlayChallengeState {
     IDLE,
@@ -69,12 +73,22 @@ enum class OverlayChallengeState {
 }
 
 @Composable
-fun ChallengeScreen(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilge: () -> Unit) {
-    Modal(onOpenTorpedo, onOpenCargo, onOpenBilge)
+fun ChallengeScreen(
+    viewModel: ProfileViewModel, // Logic Integration
+    onOpenTorpedo: () -> Unit,
+    onOpenCargo: () -> Unit,
+    onOpenBilge: () -> Unit
+) {
+    Modal(viewModel, onOpenTorpedo, onOpenCargo, onOpenBilge)
 }
 
 @Composable
-private fun Modal(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilge: () -> Unit) {
+private fun Modal(
+    viewModel: ProfileViewModel, // Logic Integration
+    onOpenTorpedo: () -> Unit,
+    onOpenCargo: () -> Unit,
+    onOpenBilge: () -> Unit
+) {
     val scale = RememberScaleConversion()
     val maxWidth = scale.dp(720f)
     val strokeDp = scale.dp(1f)
@@ -82,6 +96,17 @@ private fun Modal(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilg
     var expandedIndexTorpedo by remember { mutableIntStateOf(-1) }
     var expandedIndexCargo by remember { mutableIntStateOf(-1) }
     var expandedIndexBilge by remember { mutableIntStateOf(-1) }
+
+    // --- COOLDOWN LOGIC ---
+    // Added timer management without changing visual structure
+    var cooldownMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            cooldownMs = viewModel.getCooldownRemaining()
+            delay(1000)
+        }
+    }
+    val isLocked = cooldownMs > 0
 
     Box(
         modifier = Modifier
@@ -129,9 +154,11 @@ private fun Modal(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilg
                             item {
                                 ChallengeItem(
                                     title = "Stealth Mission: TORPEDO RUN",
-                                    description = "Guide a depth charge using the gyroscope.",
+                                    description = if (isLocked) "SYSTEMS RECHARGING..." else "Guide a depth charge using the gyroscope.",
                                     isExpanded = expandedIndexTorpedo == 0,
                                     icon = Icons.Default.Explore,
+                                    isLocked = isLocked,
+                                    cooldownTime = cooldownMs,
                                     onToggle = {
                                         expandedIndexTorpedo = if (expandedIndexTorpedo == 0) -1 else 0
                                     },
@@ -142,9 +169,11 @@ private fun Modal(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilg
                             item {
                                 ChallengeItem(
                                     title = "Balance test: CARGO HOLD",
-                                    description = "Keep the ammo crate steady in rough seas.",
+                                    description = if (isLocked) "SYSTEMS RECHARGING..." else "Keep the ammo crate steady in rough seas.",
                                     isExpanded = expandedIndexCargo == 0,
                                     icon = Icons.Default.CheckBoxOutlineBlank,
+                                    isLocked = isLocked,
+                                    cooldownTime = cooldownMs,
                                     onToggle = {
                                         expandedIndexCargo = if (expandedIndexCargo == 0) -1 else 0
                                     },
@@ -155,9 +184,11 @@ private fun Modal(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilg
                             item {
                                 ChallengeItem(
                                     title = "Field check: BILGE PUMP",
-                                    description = "Shake the device to expel water.",
+                                    description = if (isLocked) "SYSTEMS RECHARGING..." else "Shake the device to expel water.",
                                     isExpanded = expandedIndexBilge == 0,
                                     icon = Icons.Default.Water,
+                                    isLocked = isLocked,
+                                    cooldownTime = cooldownMs,
                                     onToggle = {
                                         expandedIndexBilge = if (expandedIndexBilge == 0) -1 else 0
                                     },
@@ -178,6 +209,8 @@ private fun ChallengeItem(
     description: String,
     isExpanded: Boolean,
     icon: ImageVector,
+    isLocked: Boolean, // New Logic Param
+    cooldownTime: Long, // New Logic Param
     onToggle: () -> Unit,
     onGo: () -> Unit
 ) {
@@ -185,7 +218,6 @@ private fun ChallengeItem(
     val scale = RememberScaleConversion()
 
     val headerColor = Color(0xFF1C3260)
-
     val maxCornerSize = scale.dp(24f)
 
     val headerShape = CutCornerShape(
@@ -193,12 +225,17 @@ private fun ChallengeItem(
         topEnd = maxCornerSize
     )
 
+    // Formatting timer string for the locked state UI
+    val minutes = (cooldownTime % 3600000) / 60000
+    val seconds = (cooldownTime % 60000) / 1000
+    val timerString = String.format("%02d:%02d", minutes, seconds)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(headerShape)
             .background(headerColor)
-        ) {
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -213,31 +250,42 @@ private fun ChallengeItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Orange,
+                tint = if (isLocked) Color.Gray else Orange,
                 modifier = Modifier
                     .size(scale.dp(50f))
             )
 
             Spacer(modifier = Modifier.width(scale.dp(16f)))
 
-            Text(
-                text = title,
-                color = White,
-                fontSize = scale.sp(28f),
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = scale.sp(2f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = TextStyle(
-                    platformStyle = PlatformTextStyle(includeFontPadding = false),
-                    lineHeightStyle = LineHeightStyle(
-                        LineHeightStyle.Alignment.Center,
-                        LineHeightStyle.Trim.Both
-                    ),
-                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = if (isLocked) Color.Gray else White,
+                    fontSize = scale.sp(28f),
+                    fontFamily = FontFamily.SansSerif,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = scale.sp(2f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle = LineHeightStyle(
+                            LineHeightStyle.Alignment.Center,
+                            LineHeightStyle.Trim.Both
+                        ),
+                        shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                    )
                 )
-            )
+                // Logic integration: show timer if locked
+                if (isLocked) {
+                    Text(
+                        text = "RELOADING: $timerString",
+                        color = Color.Red,
+                        fontSize = scale.sp(14f),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
 
         AnimatedVisibility(
@@ -254,7 +302,7 @@ private fun ChallengeItem(
 
                 Text(
                     text = description,
-                    color = White,
+                    color = if (isLocked) Color.Red else White,
                     textAlign = TextAlign.Center,
                     fontSize = scale.sp(26f),
                     fontFamily = FontFamily.SansSerif,
@@ -272,10 +320,13 @@ private fun ChallengeItem(
 
                 Spacer(modifier = Modifier.height(scale.dp(14f)))
 
-                Box(
-                    modifier = Modifier.align(Alignment.End)
-                ) {
-                    GoButton(onClick = onGo)
+                // Logic integration: GoButton only visible if not locked
+                if (!isLocked) {
+                    Box(
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        GoButton(onClick = onGo)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(scale.dp(14f)))
@@ -283,4 +334,3 @@ private fun ChallengeItem(
         }
     }
 }
-
