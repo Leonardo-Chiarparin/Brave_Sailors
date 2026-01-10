@@ -71,7 +71,7 @@ class UserRepository(
                     profilePictureUrl = null,
                     googleName = "",
                     googlePhotoUrl = null,
-                    // [ FIX ]: Inizializziamo il percorso avatar AI con il default
+                    // [ FIX ]: Initialize AI avatar path with the default value
                     aiAvatarPath = "ic_ai_avatar_placeholder",
                     countryCode = "IT",
                     lastUpdated = System.currentTimeMillis(),
@@ -114,6 +114,8 @@ class UserRepository(
                             "email" to user.email,
                             "name" to user.name,
                             "googleName" to user.googleName,
+                            // [ FIX ]: Added explicit sync for googlePhotoUrl
+                            "googlePhotoUrl" to (user.googlePhotoUrl ?: ""),
                             "profilePictureUrl" to (user.profilePictureUrl ?: ""),
                             "countryCode" to (user.countryCode ?: "IT"),
                             "lastUpdated" to user.lastUpdated
@@ -239,9 +241,10 @@ class UserRepository(
                     email = info.child("email").getValue(String::class.java) ?: email,
                     name = info.child("name").getValue(String::class.java) ?: "Sailor",
                     googleName = info.child("googleName").getValue(String::class.java) ?: "",
-                    googlePhotoUrl = info.child("profilePictureUrl").getValue(String::class.java),
+                    // [ FIX ]: Correctly retrieve googlePhotoUrl from its specific path
+                    googlePhotoUrl = info.child("googlePhotoUrl").getValue(String::class.java),
 
-                    // [ FIX ]: Manteniamo il default locale, dato che il percorso file varia tra dispositivi
+                    // [ FIX ]: Maintain local default as file path varies between devices
                     aiAvatarPath = "ic_ai_avatar_placeholder",
 
                     countryCode = info.child("countryCode").getValue(String::class.java) ?: "IT",
