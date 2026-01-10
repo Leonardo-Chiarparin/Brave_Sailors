@@ -474,7 +474,7 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
                         AnimatedVisibility(visible = overlayMenuState == OverlayMenuState.SHOWING_OPTIONS, enter = fadeIn(), exit = fadeOut()) {
-                            GameOptionsScreen(onBack = { overlayMenuState = OverlayMenuState.IDLE })
+                            GameOptionsScreen(onBack = { overlayMenuState = OverlayMenuState.IDLE },viewModel = viewModel)
                         }
                         AnimatedVisibility(visible = overlayMenuState == OverlayMenuState.SHOWING_SETTINGS, enter = fadeIn(), exit = fadeOut()) {
                             AccountSettingsScreen(

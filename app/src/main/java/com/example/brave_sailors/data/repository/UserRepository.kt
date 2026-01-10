@@ -71,6 +71,8 @@ class UserRepository(
                     profilePictureUrl = null,
                     googleName = "",
                     googlePhotoUrl = null,
+                    // [ FIX ]: Inizializziamo il percorso avatar AI con il default
+                    aiAvatarPath = "ic_ai_avatar_placeholder",
                     countryCode = "IT",
                     lastUpdated = System.currentTimeMillis(),
                     level = 1,
@@ -238,6 +240,10 @@ class UserRepository(
                     name = info.child("name").getValue(String::class.java) ?: "Sailor",
                     googleName = info.child("googleName").getValue(String::class.java) ?: "",
                     googlePhotoUrl = info.child("profilePictureUrl").getValue(String::class.java),
+
+                    // [ FIX ]: Manteniamo il default locale, dato che il percorso file varia tra dispositivi
+                    aiAvatarPath = "ic_ai_avatar_placeholder",
+
                     countryCode = info.child("countryCode").getValue(String::class.java) ?: "IT",
                     lastUpdated = info.child("lastUpdated").getValue(Long::class.java) ?: System.currentTimeMillis(),
                     level = progression.child("level").getValue(Int::class.java) ?: 1,

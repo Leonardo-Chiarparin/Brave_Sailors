@@ -1,20 +1,15 @@
 package com.example.brave_sailors
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -22,11 +17,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +26,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -42,6 +34,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.core.content.ContextCompat
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
+import com.canhub.cropper.CropImageContract
+import com.canhub.cropper.CropImageContractOptions
+import com.canhub.cropper.CropImageOptions
+import com.canhub.cropper.CropImageView
+import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.components.DividerOrange
 import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.components.SixthButton
@@ -49,17 +49,21 @@ import com.example.brave_sailors.ui.theme.DarkBlue
 import com.example.brave_sailors.ui.theme.LightBlue
 import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.White
+import com.example.brave_sailors.ui.utils.GameSettingsManager
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
+import java.io.File
 
 @Composable
 fun GameOptionsScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: ProfileViewModel // [ INTEGRATION ]: Needed for saving AI Avatar
 ) {
-    Modal(onBack)
+    Modal(onBack, viewModel)
 }
 
 @Composable
-private fun Modal(onBack: () -> Unit) {
+private fun Modal(onBack: () -> Unit, viewModel: ProfileViewModel) {
+    val context = LocalContext.current
     val scale = RememberScaleConversion()
     val interactionSource = remember { MutableInteractionSource() }
     val maxWidth = scale.dp(720f)
@@ -67,10 +71,56 @@ private fun Modal(onBack: () -> Unit) {
 
     val closeButtonShape = CutCornerShape(bottomStart = scale.dp(34f))
 
-    // Fake states regarding the user's options ( they have to be managed through the ViewModel )
-    var isAlarmOn by remember { mutableStateOf(true) }
-    var isMusicOn by remember { mutableStateOf(false) } // [ NOTE ]: it can be done using the device's torch, otherwise remove this element
-    var isVibrationOn by remember { mutableStateOf(true) }
+    // -- SETTINGS MANAGER --
+    val settingsManager = remember { GameSettingsManager(context) }
+
+    // States connected to SharedPreferences
+    var isAlarmOn by remember { mutableStateOf(settingsManager.isAlarmOn) }
+    var isMusicOn by remember { mutableStateOf(settingsManager.isMusicOn) }
+    var isVibrationOn by remember { mutableStateOf(settingsManager.isVibrationOn) }
+
+    // -- AI AVATAR LOGIC --
+    val userState by viewModel.userState.collectAsState()
+    val aiAvatarPath = userState?.aiAvatarPath ?: "ic_ai_avatar_placeholder"
+
+    val cropOptions = remember {
+        CropImageContractOptions(
+            uri = null,
+            cropImageOptions = CropImageOptions(
+                imageSourceIncludeGallery = false,
+                imageSourceIncludeCamera = true,
+                guidelines = CropImageView.Guidelines.ON,
+                aspectRatioX = 1,
+                aspectRatioY = 1,
+                fixAspectRatio = true
+            )
+        )
+    }
+
+    val cropImageLauncher = rememberLauncherForActivityResult(contract = CropImageContract()) { result ->
+        if (result.isSuccessful) {
+            result.uriContent?.let { uri ->
+                // Convert URI to Bitmap and Save via ViewModel
+                val bitmap = android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                viewModel.updateAiAvatar(context, bitmap)
+            }
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) cropImageLauncher.launch(cropOptions)
+    }
+
+    val onAiPortraitClick: () -> Unit = {
+        val permission = Manifest.permission.CAMERA
+        if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) {
+            cropImageLauncher.launch(cropOptions)
+        } else {
+            cameraPermissionLauncher.launch(permission)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -88,20 +138,8 @@ private fun Modal(onBack: () -> Unit) {
                     val w = size.width
                     val stroke = strokeDp.toPx()
                     val halfStroke = stroke / 2f
-
-                    drawLine(
-                        color = Orange,
-                        start = Offset(0f, halfStroke),
-                        end = Offset(w, halfStroke),
-                        strokeWidth = stroke
-                    )
-
-                    drawLine(
-                        color = Orange,
-                        start = Offset(0f, h - halfStroke),
-                        end = Offset(w, h - halfStroke),
-                        strokeWidth = stroke
-                    )
+                    drawLine(Orange, Offset(0f, halfStroke), Offset(w, halfStroke), stroke)
+                    drawLine(Orange, Offset(0f, h - halfStroke), Offset(w, h - halfStroke), stroke)
                 },
             contentAlignment = Alignment.TopCenter
         ) {
@@ -129,10 +167,7 @@ private fun Modal(onBack: () -> Unit) {
                         letterSpacing = scale.sp(2f),
                         style = TextStyle(
                             platformStyle = PlatformTextStyle(includeFontPadding = false),
-                            lineHeightStyle = LineHeightStyle(
-                                LineHeightStyle.Alignment.Center,
-                                LineHeightStyle.Trim.Both
-                            ),
+                            lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
                             shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
                         )
                     )
@@ -155,29 +190,33 @@ private fun Modal(onBack: () -> Unit) {
                             letterSpacing = scale.sp(2f),
                             style = TextStyle(
                                 platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                lineHeightStyle = LineHeightStyle(
-                                    LineHeightStyle.Alignment.Center,
-                                    LineHeightStyle.Trim.Both
-                                ),
+                                lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
                                 shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
                             )
                         )
 
                         Spacer(modifier = Modifier.height(scale.dp(8f)))
-
                         DividerOrange()
-
                         Spacer(modifier = Modifier.height(scale.dp(46f)))
 
-                        OptionItem("Alarm \"Your turn\"", isAlarmOn) { isAlarmOn = it }
+                        OptionItem("Alarm \"Your turn\"", isAlarmOn) {
+                            isAlarmOn = it
+                            settingsManager.isAlarmOn = it
+                        }
 
                         Spacer(modifier = Modifier.height(scale.dp(28f)))
 
-                        OptionItem("Music", isMusicOn) { isMusicOn = it }
+                        OptionItem("Music", isMusicOn) {
+                            isMusicOn = it
+                            settingsManager.isMusicOn = it
+                        }
 
                         Spacer(modifier = Modifier.height(scale.dp(28f)))
 
-                        OptionItem("Vibration", isVibrationOn) { isVibrationOn = it }
+                        OptionItem("Vibration", isVibrationOn) {
+                            isVibrationOn = it
+                            settingsManager.isVibrationOn = it
+                        }
 
                         Spacer(modifier = Modifier.height(scale.dp(28f)))
 
@@ -195,13 +234,22 @@ private fun Modal(onBack: () -> Unit) {
                                 letterSpacing = scale.sp(2f),
                                 style = TextStyle(
                                     platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                    lineHeightStyle = LineHeightStyle(
-                                        LineHeightStyle.Alignment.Center,
-                                        LineHeightStyle.Trim.Both
-                                    ),
+                                    lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
                                     shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
                                 )
                             )
+
+                            // AI Avatar Display
+                            val aiAvatarPainter = if (aiAvatarPath != "ic_ai_avatar_placeholder") {
+                                rememberAsyncImagePainter(
+                                    model = ImageRequest.Builder(LocalContext.current)
+                                        .data(File(aiAvatarPath))
+                                        .build(),
+                                    error = painterResource(R.drawable.ic_ai_avatar_placeholder)
+                                )
+                            } else {
+                                painterResource(id = R.drawable.ic_ai_avatar_placeholder)
+                            }
 
                             Box(
                                 modifier = Modifier
@@ -210,8 +258,9 @@ private fun Modal(onBack: () -> Unit) {
                                 contentAlignment = Alignment.Center
                             ) {
                                 SixthButton(
-                                    onClick = {  },
-                                    imagePainter = painterResource(id = R.drawable.ic_ai_avatar_placeholder)                                 )
+                                    onClick = onAiPortraitClick,
+                                    imagePainter = aiAvatarPainter
+                                )
                             }
                         }
 
@@ -245,17 +294,12 @@ private fun Modal(onBack: () -> Unit) {
     }
 }
 
+// OptionItem and GameOptionSwitch remain unchanged
 @Composable
-fun OptionItem(
-    text: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
+fun OptionItem(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     val scale = RememberScaleConversion()
-
     Row(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -268,10 +312,7 @@ fun OptionItem(
             letterSpacing = scale.sp(2f),
             style = TextStyle(
                 platformStyle = PlatformTextStyle(includeFontPadding = false),
-                lineHeightStyle = LineHeightStyle(
-                    LineHeightStyle.Alignment.Center,
-                    LineHeightStyle.Trim.Both
-                ),
+                lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
                 shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
             )
         )
@@ -280,10 +321,7 @@ fun OptionItem(
 }
 
 @Composable
-fun GameOptionSwitch(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
+fun GameOptionSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     val scale = RememberScaleConversion()
     val width = scale.dp(122f)
     val height = scale.dp(64f)
@@ -292,68 +330,21 @@ fun GameOptionSwitch(
     Row(
         modifier = Modifier
             .border(scale.dp(2f), Orange)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) { onCheckedChange(!checked) }
+            .clickable(interactionSource = interactionSource, indication = null) { onCheckedChange(!checked) }
     ) {
         if (checked) {
-            Box(
-                modifier = Modifier
-                    .size(width / 2, height)
-                    .background(Orange),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = null,
-                    tint = DarkBlue,
-                    modifier = Modifier
-                        .graphicsLayer(rotationZ = 90f)
-                        .size(scale.dp(22f))
-                )
+            Box(modifier = Modifier.size(width / 2, height).background(Orange), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Menu, null, tint = DarkBlue, modifier = Modifier.graphicsLayer(rotationZ = 90f).size(scale.dp(22f)))
             }
-            Box(
-                modifier = Modifier
-                    .size(width / 2, height)
-                    .background(DarkBlue),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    tint = White,
-                    modifier = Modifier.size(scale.dp(36f))
-                )
+            Box(modifier = Modifier.size(width / 2, height).background(DarkBlue), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Check, null, tint = White, modifier = Modifier.size(scale.dp(36f)))
             }
         } else {
-            Box(
-                modifier = Modifier
-                    .size(width / 2, height)
-                    .background(DarkBlue),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = null,
-                    tint = White,
-                    modifier = Modifier.size(scale.dp(42f))
-                )
+            Box(modifier = Modifier.size(width / 2, height).background(DarkBlue), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Close, null, tint = White, modifier = Modifier.size(scale.dp(42f)))
             }
-            Box(
-                modifier = Modifier
-                    .size(width / 2, height)
-                    .background(Orange),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = null,
-                    tint = Color.Black,
-                    modifier = Modifier
-                        .graphicsLayer(rotationZ = 90f)
-                        .size(scale.dp(22f))
-                )
+            Box(modifier = Modifier.size(width / 2, height).background(Orange), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Menu, null, tint = Color.Black, modifier = Modifier.graphicsLayer(rotationZ = 90f).size(scale.dp(22f)))
             }
         }
     }

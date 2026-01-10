@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -75,19 +76,20 @@ import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
-
 val Red = Color(0xFFD32F2F)
 
 @Composable
 fun MatchVsComputerScreen(
     db: AppDatabase,
-    difficulty: String, // such difficulty manages the AI's behavior ( using random search, DQN, etc. )
-    firingRule: String, // this parameter defines how many times a player has to shoot ( once, up to the opponent's remaining ships, until he/she hits something )
+    difficulty: String,
+    firingRule: String,
     user: User?,
     flag: Flag?,
     onRetire: () -> Unit,
     onComplete: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+
     // --- SETUP VIEWMODEL ---
     val repository = remember {
         UserRepository(
@@ -100,7 +102,7 @@ fun MatchVsComputerScreen(
     }
 
     val viewModel: MatchVsComputerViewModel = viewModel(
-        factory = MatchVsComputerViewModelFactory(db.userDao(), db.fleetDao(), repository)
+        factory = MatchVsComputerViewModelFactory(context, db.userDao(), db.fleetDao(), repository)
     )
 
     LaunchedEffect(Unit) {
@@ -124,18 +126,14 @@ private fun Modal(
     val scale = RememberScaleConversion()
     val maxWidth = scale.dp(720f)
 
-    // [ LOGIC CONNECTED ]: Observing state from ViewModel
     val uiState by viewModel.uiState.collectAsState()
 
-    // [ TO - DO ]: Implement a real turn exchange mechanism, the following is just for example
-    // (DONE via ViewModel)
     val isPlayerTurn = uiState.isPlayerTurn
     val turnNumber = uiState.turnNumber
 
     var showDialogRetire by remember { mutableStateOf(false) }
     var showDialogMatchResult by remember { mutableStateOf(false) }
 
-    // Logic to show result dialog
     LaunchedEffect(uiState.isGameOver) {
         if (uiState.isGameOver) {
             showDialogMatchResult = true
@@ -190,7 +188,7 @@ private fun Modal(
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
-                            enabled = !uiState.isGameOver, // it's always possible to give up ( for this case only, as well as the one related to the match via Lobby )
+                            enabled = !uiState.isGameOver,
                             onClick = { showDialogRetire = true }
                         ),
                     contentAlignment = Alignment.Center
@@ -220,8 +218,7 @@ private fun Modal(
                 },
                 label = "HeaderAnimation"
             ) { isPlayer ->
-                // [ TO - DO ]: Adjust the player's statistics
-                if (isPlayer)
+                if (isPlayer) {
                     Match(
                         name = user?.name ?: "Sailor",
                         avatarUrl = user?.profilePictureUrl,
@@ -230,15 +227,22 @@ private fun Modal(
                         losses = user?.losses.toString(),
                         isAi = false
                     )
-                else
+                } else {
+                    // [ FIX ]: Check if there is a custom AI image.
+                    // If 'aiAvatarPath' exists and is not the default placeholder, pass it to 'avatarUrl'.
+                    // Otherwise pass null to let the Match component use the default robot icon.
+                    val aiPath = user?.aiAvatarPath
+                    val avatarToDisplay = if (aiPath != null && aiPath != "ic_ai_avatar_placeholder") aiPath else null
+
                     Match(
                         name = "$difficulty AI",
-                        avatarUrl = null, // Default avatar (ic_ai_avatar_placeholder)
+                        avatarUrl = avatarToDisplay, // Pass the path here
                         flagUrl = null,
                         wins = "-",
                         losses = "-",
                         isAi = true
                     )
+                }
             }
 
             Spacer(modifier = Modifier.height(scale.dp(86f)))
@@ -256,18 +260,16 @@ private fun Modal(
                     .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // [ TO - DO ]: It must display the number of the opposing ships according to the turn
                 val targetFleetMap = if (isPlayerTurn) uiState.aiShipsComposition else uiState.playerShipsComposition
 
                 FleetStatus(
                     turn = turnNumber,
                     isPlayerTurn = isPlayerTurn,
-                    shipsRemaining = targetFleetMap // Passed map directly
+                    shipsRemaining = targetFleetMap
                 )
 
                 Spacer(modifier = Modifier.height(scale.dp(28f)))
 
-                // Prepare data for GameGrid
                 val gridToShow = if (isPlayerTurn) uiState.aiGrid else uiState.playerGrid
                 val showShips = (!isPlayerTurn) || uiState.isGameOver
 
@@ -319,10 +321,8 @@ private fun GameGrid(
     onCellClick: (Int, Int) -> Unit
 ) {
     val scale = RememberScaleConversion()
-
     val cellSize = scale.dp(64f)
 
-    // [ NOTE ]: The grid must have no open-close animation ( while being replaced across the turns depending on the current player )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -426,13 +426,10 @@ private fun GameGrid(
                         )
                     )
             ) {
-                // -- PLACEMENT ( if the AI's turn is ongoing ) --
-                // Qui disegniamo la griglia reale
                 Column {
                     for (row in 0 until GRID_SIZE) {
                         Row {
                             for (col in 0 until GRID_SIZE) {
-                                // Retrieve data, safely
                                 val cell = if (grid.isNotEmpty() && row < grid.size && col < grid[0].size) grid[row][col] else GridCell(row, col)
 
                                 Box(
@@ -455,7 +452,6 @@ private fun GameGrid(
                                         )
                                     }
 
-                                    // Display markers (Using standard IFs to match style without crashes)
                                     if (cell.status == CellStatus.HIT) {
                                         Icon(imageVector = Icons.Default.Close, contentDescription = "Hit", tint = Red, modifier = Modifier.size(scale.dp(48f)))
                                     }

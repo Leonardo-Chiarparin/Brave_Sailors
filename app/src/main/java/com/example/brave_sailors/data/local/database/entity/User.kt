@@ -10,7 +10,7 @@ data class User(
     val sessionToken: String? = null,
     val name: String,
     val profilePictureUrl: String?,
-
+    val aiAvatarPath: String? = "ic_ai_avatar_placeholder",
     val googleName: String,
     val googlePhotoUrl: String?,
 

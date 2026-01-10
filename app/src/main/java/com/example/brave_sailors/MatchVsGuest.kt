@@ -79,6 +79,7 @@ import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
 // [ NOTE ]: Colors utilized for hit/miss markers
 val GuestRed = Color(0xFFD32F2F)
+val LABEL_COLOR_GUEST = Color.White // Renamed to avoid collision if files merged, or keep same
 
 @Composable
 fun MatchVsGuestScreen(
@@ -86,13 +87,12 @@ fun MatchVsGuestScreen(
     user: User?,
     flag: Flag?,
     onRetire: () -> Unit,
-    onComplete: (Boolean) -> Unit // true if P1 (User) wins, false otherwise
+    onComplete: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val db = remember { AppDatabase.getDatabase(context) }
 
     // --- SETUP VIEWMODEL ---
-    // [ LOGIC ]: Creating the ViewModel specifically for Local Guest Match
     val repository = remember {
         UserRepository(
             RetrofitClient.api,
@@ -104,10 +104,10 @@ fun MatchVsGuestScreen(
     }
 
     val viewModel: MatchVsGuestViewModel = viewModel(
-        factory = MatchVsGuestViewModelFactory(db.userDao(), db.fleetDao(), repository)
+        // [ FIX ]: Passed context to factory
+        factory = MatchVsGuestViewModelFactory(context, db.userDao(), db.fleetDao(), repository)
     )
 
-    // [ LOGIC ]: Initialize the match with the chosen firing rule when the composable enters the composition
     LaunchedEffect(Unit) {
         viewModel.initializeMatch(firingRule)
     }
@@ -137,7 +137,6 @@ private fun Modal(
     var showDialogRetire by remember { mutableStateOf(false) }
 
     // [ LOGIC ]: Control state for the "Pass Device" dialog
-    // This dialog blocks the view so players don't see each other's ships during the swap
     val showTurnDialog = uiState.showTurnDialog
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -219,7 +218,6 @@ private fun Modal(
                 },
                 label = "HeaderAnimation"
             ) { isP1 ->
-                // [ UI ]: Display stats for Player 1 (User) or Player 2 (Guest)
                 if (isP1) {
                     Match(
                         name = user?.name ?: "Sailor",
@@ -232,11 +230,11 @@ private fun Modal(
                 } else {
                     Match(
                         name = "Player 2",
-                        avatarUrl = null, // Placeholder will be used by component
+                        avatarUrl = null,
                         flagUrl = null,
-                        wins = "-", // Guest stats are not tracked
+                        wins = "-",
                         losses = "-",
-                        isAi = false // Used 'false' to show generic human avatar if available
+                        isAi = false
                     )
                 }
             }
@@ -257,24 +255,17 @@ private fun Modal(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // --- FLEET STATUS ---
-                // [ LOGIC ]: We display the composition of the OPPONENT'S fleet (the target)
-                // The ViewModel calculates this in 'currentEnemyFleetComposition'
                 FleetStatus(
                     turn = turnNumber,
-                    isPlayerTurn = true, // Visually treated as player looking at enemy radar
+                    isPlayerTurn = true,
                     shipsRemaining = uiState.currentEnemyFleetComposition
                 )
 
                 Spacer(modifier = Modifier.height(scale.dp(28f)))
 
                 // --- GAME GRID ---
-                // [ LOGIC ]: Determine which grid to show based on whose turn it is.
-                // If it is P1's turn, we show P2's grid (so P1 can shoot at it).
-                // If it is P2's turn, we show P1's grid.
                 val targetGrid = if (isPlayer1Turn) uiState.p2Grid else uiState.p1Grid
 
-                // [ NOTE ]: In Guest Mode, ships are NEVER shown on the firing grid to prevent cheating.
-                // The 'showShips' parameter is always false here.
                 GameGridGuest(
                     grid = targetGrid,
                     onCellClick = { r, c ->
@@ -288,7 +279,6 @@ private fun Modal(
 
         // --- DIALOGS ---
 
-        // 1. Turn Switching Dialog (The "Curtain")
         if (showTurnDialog && !uiState.isGameOver) {
             val nextPlayerName = if (isPlayer1Turn) (user?.name ?: "Player 1") else "Player 2"
             DialogTurn(
@@ -300,7 +290,6 @@ private fun Modal(
             )
         }
 
-        // 2. Retire Dialog
         if (showDialogRetire) {
             DialogRetire(
                 onDismiss = { showDialogRetire = false },
@@ -312,7 +301,6 @@ private fun Modal(
             )
         }
 
-        // 3. Match Result Dialog
         if (uiState.isGameOver) {
             val winnerName = uiState.winnerName
             DialogMatchResult(
@@ -333,8 +321,6 @@ private fun GameGridGuest(
 ) {
     val scale = RememberScaleConversion()
     val cellSize = scale.dp(64f)
-
-    // [ UI ]: Constants for grid layout
     val gridSize = 8
 
     Row(
@@ -344,7 +330,6 @@ private fun GameGridGuest(
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.Center
     ) {
-        // Y-Axis Labels (Numbers)
         Column(
             modifier = Modifier
                 .width(scale.dp(24f))
@@ -364,7 +349,7 @@ private fun GameGridGuest(
                 ) {
                     Text(
                         text = i.toString(),
-                        color = LABEL_COLOR,
+                        color = LABEL_COLOR_GUEST,
                         fontSize = scale.sp(22f),
                         fontFamily = FontFamily.SansSerif,
                         fontWeight = FontWeight.Medium,
@@ -389,7 +374,6 @@ private fun GameGridGuest(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // X-Axis Labels (Letters)
             Row(
                 modifier = Modifier
                     .padding(bottom = scale.dp(6f), start = scale.dp(2f))
@@ -407,7 +391,7 @@ private fun GameGridGuest(
                     ) {
                         Text(
                             text = letters.getOrElse(i) { "?" }.toString(),
-                            color = LABEL_COLOR,
+                            color = LABEL_COLOR_GUEST,
                             fontSize = scale.sp(22f),
                             fontFamily = FontFamily.SansSerif,
                             fontWeight = FontWeight.Medium,
@@ -429,7 +413,6 @@ private fun GameGridGuest(
                 }
             }
 
-            // Grid Background
             Box(
                 modifier = Modifier
                     .padding(scale.dp(2f) / 2)
@@ -447,7 +430,6 @@ private fun GameGridGuest(
                     for (row in 0 until gridSize) {
                         Row {
                             for (col in 0 until gridSize) {
-                                // Retrieve cell data safely
                                 val cell = if (grid.isNotEmpty() && row < grid.size && col < grid[0].size) grid[row][col] else GridCell(row, col)
 
                                 Box(
@@ -455,16 +437,11 @@ private fun GameGridGuest(
                                         .size(cellSize)
                                         .border(0.5.dp, Color.White.copy(alpha = 0.1f))
                                         .clickable(
-                                            // Enable click only if not already hit/miss
                                             enabled = cell.status != CellStatus.HIT && cell.status != CellStatus.MISS,
                                             onClick = { onCellClick(row, col) }
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    // [ NOTE ]: Unlike MatchVsComputer, we NEVER render ships here.
-                                    // Players only see hits and misses on the opponent's grid.
-
-                                    // Display markers
                                     if (cell.status == CellStatus.HIT) {
                                         Icon(
                                             imageVector = Icons.Default.Close,

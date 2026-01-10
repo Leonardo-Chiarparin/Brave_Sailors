@@ -349,6 +349,35 @@ class ProfileViewModel(
             userDao.updateLastWinTimestamp(userId, now)
         }
     }
+    fun updateAiAvatar(context: Context, bitmap: Bitmap) {
+        val currentUser = userState.value ?: return
+        viewModelScope.launch {
+            try {
+                // Save to internal storage
+                val filePath = withContext(Dispatchers.IO) {
+                    val fileName = "ai_avatar_${currentUser.id}.jpg"
+                    val file = File(context.filesDir, fileName)
+                    if (file.exists()) file.delete()
+                    FileOutputStream(file).use { out ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                    }
+                    file.absolutePath
+                }
+
+                // Update User Entity
+                val updatedUser = currentUser.copy(aiAvatarPath = filePath)
+
+                withContext(Dispatchers.IO) {
+                    userDao.updateUser(updatedUser)
+                    // Note: We usually don't sync this specific local setting to cloud
+                    // unless you want the AI image to persist across devices.
+                    // If yes: userRepository.syncLocalToCloud(updatedUser.id)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()

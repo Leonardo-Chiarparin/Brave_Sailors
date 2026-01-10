@@ -1,5 +1,6 @@
 package com.example.brave_sailors.model
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -9,49 +10,41 @@ import com.example.brave_sailors.data.local.database.entity.MoveLog
 import com.example.brave_sailors.data.local.database.entity.SavedShip
 import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.data.repository.UserRepository
+import com.example.brave_sailors.ui.utils.GameSettingsManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 // --- UI STATE FOR 2-PLAYER LOCAL MATCH ---
-// Holds the state for both players, including their grids and fleet status.
 data class MatchGuestUiState(
     val playerUser: User? = null,
-    val isPlayer1Turn: Boolean = true, // true = Player 1, false = Player 2
+    val isPlayer1Turn: Boolean = true,
     val turnNumber: Int = 1,
-
-    // Grids: P1's grid contains P1's ships (P2 fires here).
     val p1Grid: List<List<GridCell>> = emptyList(),
-    // Grids: P2's grid contains P2's ships (P1 fires here).
     val p2Grid: List<List<GridCell>> = emptyList(),
-
     val p1ShipsAlive: Int = 0,
     val p2ShipsAlive: Int = 0,
-
-    // Composition of the ENEMY fleet (what the current player sees on the radar)
     val currentEnemyFleetComposition: Map<Int, Int> = emptyMap(),
-
     val shotsRemaining: Int = 1,
     val isGameOver: Boolean = false,
     val winnerName: String = "",
     val isPlayer1Winner: Boolean = false,
-
-    // Controls the "Pass the device" dialog between turns
     val showTurnDialog: Boolean = true
 )
 
-// --- SINGLETON TO HOLD GUEST DATA ---
-// Used to pass the Guest's fleet from the setup screen to this ViewModel
 object GuestDataHolder {
     var p2Fleet: List<SavedShip> = emptyList()
 }
 
 class MatchVsGuestViewModel(
+    context: Context, // [ FIX ]
     private val userDao: UserDao,
     private val fleetDao: FleetDao,
     private val userRepository: UserRepository
 ) : ViewModel() {
+
+    private val settingsManager = GameSettingsManager(context)
 
     private val _uiState = MutableStateFlow(MatchGuestUiState())
     val uiState = _uiState.asStateFlow()
@@ -60,11 +53,12 @@ class MatchVsGuestViewModel(
     private var firingRule = "One shot"
     private val moveLogs = mutableListOf<MoveLog>()
 
-    // --- INITIALIZATION ---
     fun initializeMatch(rule: String) {
         this.firingRule = rule
 
-        // Immediate reset to prevent UI glitches from previous states
+        // Avvia Musica
+        settingsManager.manageMusic(settingsManager.isMusicOn)
+
         _uiState.update {
             it.copy(
                 isGameOver = false,
@@ -79,26 +73,19 @@ class MatchVsGuestViewModel(
 
         viewModelScope.launch {
             val user = userDao.getCurrentUser() ?: return@launch
-
-            // 1. Load Player 1 Fleet from Database
             val p1Fleet = fleetDao.getUserFleet(user.id)
-
-            // 2. Load Player 2 Fleet from Memory (passed via Singleton)
             val p2Fleet = GuestDataHolder.p2Fleet
 
             if (p1Fleet.isEmpty() || p2Fleet.isEmpty()) return@launch
 
-            // 3. Create and Populate Grids
             val grid1 = createEmptyGrid()
-            placeFleetOnGrid(grid1, p1Fleet) // Place P1 ships
+            placeFleetOnGrid(grid1, p1Fleet)
 
             val grid2 = createEmptyGrid()
-            placeFleetOnGrid(grid2, p2Fleet) // Place P2 ships
+            placeFleetOnGrid(grid2, p2Fleet)
 
-            // 4. Initial composition for the UI (Player 1 starts, so calculate P2's composition)
             val p2Composition = calculateFleetComposition(grid2)
 
-            // 5. Update UI State
             _uiState.update {
                 it.copy(
                     playerUser = user,
@@ -109,65 +96,54 @@ class MatchVsGuestViewModel(
                     currentEnemyFleetComposition = p2Composition,
                     isPlayer1Turn = true,
                     turnNumber = 1,
-                    shotsRemaining = calculateShots(true, p1Fleet.size), // Calculate P1 shots
-                    showTurnDialog = true, // Force "Pass Device" dialog at start
+                    shotsRemaining = calculateShots(true, p1Fleet.size),
+                    showTurnDialog = true,
                     isGameOver = false
                 )
             }
         }
     }
 
-    // Called when the user clicks "OK" / "Ready" on the turn change dialog
     fun closeTurnDialog() {
         _uiState.update { it.copy(showTurnDialog = false) }
     }
 
-    // --- GAMEPLAY LOGIC ---
     fun onFire(row: Int, col: Int) {
         val state = _uiState.value
-
-        // Prevent firing if game over, no shots, or dialog is open
         if (state.isGameOver || state.shotsRemaining <= 0 || state.showTurnDialog) return
 
-        // Determine target grid: If P1 is playing, they target P2's grid, and vice versa.
         val targetGrid = if (state.isPlayer1Turn) state.p2Grid else state.p1Grid
-
         val targetCell = targetGrid[row][col]
-        // Prevent hitting the same cell twice
         if (targetCell.status == CellStatus.HIT || targetCell.status == CellStatus.MISS) return
 
         val isHit = (targetCell.status == CellStatus.SHIP)
         targetCell.status = if (isHit) CellStatus.HIT else CellStatus.MISS
 
-        // --- FIRING RULES IMPLEMENTATION ---
+        // [ VIBRAZIONE ]
+        if (isHit) settingsManager.triggerVibration()
+
         var newShots = state.shotsRemaining
         var turnEnds = false
 
         if (firingRule == "Sequential hits") {
             if (!isHit) {
-                // Miss = turn ends immediately
                 newShots = 0
                 turnEnds = true
             } else {
-                // Hit = keep firing (shots remain at 1)
                 newShots = 1
             }
         } else {
-            // Standard rules or Chain attacks
             newShots -= 1
             if (newShots <= 0) turnEnds = true
         }
 
-        // --- UPDATE STATS AND CHECK VICTORY ---
         val p1Alive = countShipsAlive(state.p1Grid)
         val p2Alive = countShipsAlive(state.p2Grid)
 
-        // P1 wins if P2 has 0 ships. P2 wins if P1 has 0 ships.
         val p1Wins = (p2Alive == 0)
         val p2Wins = (p1Alive == 0)
         val isGameOver = p1Wins || p2Wins
 
-        // Log the move
         val actorId = if (state.isPlayer1Turn) (state.playerUser?.id ?: "P1") else "Player 2"
         moveLogs.add(
             MoveLog(
@@ -180,7 +156,6 @@ class MatchVsGuestViewModel(
             )
         )
 
-        // Recalculate the victim's composition to show updated status to the attacker
         val victimGrid = if (state.isPlayer1Turn) state.p2Grid else state.p1Grid
         val victimComp = calculateFleetComposition(victimGrid)
 
@@ -197,8 +172,8 @@ class MatchVsGuestViewModel(
         }
 
         if (isGameOver) {
-            // Save match record (only if P1 wins/loses, we treat P2 as "Guest")
             saveMatchToDb(p1Wins)
+            settingsManager.manageMusic(false)
         } else if (turnEnds) {
             switchTurn()
         }
@@ -208,11 +183,9 @@ class MatchVsGuestViewModel(
         val currentState = _uiState.value
         val nextIsPlayer1 = !currentState.isPlayer1Turn
 
-        // Determine how many ships the NEXT player has alive to calculate their shots
         val nextPlayerShipsCount = if (nextIsPlayer1) currentState.p1ShipsAlive else currentState.p2ShipsAlive
         val shots = calculateShots(nextIsPlayer1, nextPlayerShipsCount)
 
-        // Prepare the Enemy Composition for the NEXT player (If next is P1, they see P2's fleet)
         val nextEnemyGrid = if (nextIsPlayer1) currentState.p2Grid else currentState.p1Grid
         val nextEnemyComp = calculateFleetComposition(nextEnemyGrid)
 
@@ -221,19 +194,20 @@ class MatchVsGuestViewModel(
                 isPlayer1Turn = nextIsPlayer1,
                 shotsRemaining = shots,
                 turnNumber = it.turnNumber + 1,
-                showTurnDialog = true, // Trigger the "Pass Device" screen
+                showTurnDialog = true,
                 currentEnemyFleetComposition = nextEnemyComp
             )
         }
-    }
 
-    // --- HELPER FUNCTIONS (Copied from MatchVsComputer) ---
+        // [ ALARM ]: Si attiva sempre al cambio turno in locale
+        settingsManager.triggerTurnAlarm()
+    }
 
     private fun calculateShots(isPlayer1: Boolean, myShipsAlive: Int): Int {
         return when (firingRule) {
             "One shot" -> 1
             "Chain attacks" -> myShipsAlive
-            "Sequential hits" -> 1 // Always starts with 1 shot in this mode
+            "Sequential hits" -> 1
             else -> 1
         }
     }
@@ -254,7 +228,6 @@ class MatchVsGuestViewModel(
         val allShips = mutableMapOf<Int, Int>()
         val aliveShips = mutableSetOf<Int>()
 
-        // Scan grid to find all ships and which are still alive
         for (row in grid) {
             for (cell in row) {
                 if (cell.shipId > 0) {
@@ -266,13 +239,11 @@ class MatchVsGuestViewModel(
             }
         }
 
-        // Initialize counts for all sizes
         val composition = mutableMapOf<Int, Int>()
         for (size in allShips.values) {
             composition[size] = 0
         }
 
-        // Increment count for alive ships
         for (id in aliveShips) {
             val size = allShips[id] ?: 1
             composition[size] = (composition[size] ?: 0) + 1
@@ -302,8 +273,6 @@ class MatchVsGuestViewModel(
 
     fun onRetire() {
         val state = _uiState.value
-        // If it's Player 1's turn and they retire, P1 loses.
-        // If it's Player 2's turn and they retire, P1 wins.
         val isP1Surrender = state.isPlayer1Turn
         val p1Wins = !isP1Surrender
 
@@ -311,19 +280,24 @@ class MatchVsGuestViewModel(
             val uId = state.playerUser?.id ?: return@launch
             userRepository.saveMatchRecord(uId, "Player 2", p1Wins, "Local", moveLogs)
         }
+        settingsManager.manageMusic(false)
     }
 
     private fun saveMatchToDb(p1Victory: Boolean) {
         val user = _uiState.value.playerUser ?: return
         viewModelScope.launch {
-            // We always save the record for the logged-in user (Player 1)
-            // Opponent name is hardcoded as "Player 2" for local guest matches
             userRepository.saveMatchRecord(user.id, "Player 2", p1Victory, "Local", moveLogs)
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        settingsManager.releaseMusic()
     }
 }
 
 class MatchVsGuestViewModelFactory(
+    private val context: Context, // [ FIX ]
     private val userDao: UserDao,
     private val fleetDao: FleetDao,
     private val userRepository: UserRepository
@@ -331,7 +305,7 @@ class MatchVsGuestViewModelFactory(
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MatchVsGuestViewModel::class.java)) {
-            return MatchVsGuestViewModel(userDao, fleetDao, userRepository) as T
+            return MatchVsGuestViewModel(context, userDao, fleetDao, userRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

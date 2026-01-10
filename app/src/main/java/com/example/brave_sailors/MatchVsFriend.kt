@@ -27,12 +27,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.brave_sailors.data.local.database.AppDatabase
 import com.example.brave_sailors.data.remote.api.Flag
@@ -63,10 +65,12 @@ fun MatchVsFriend(
     db: AppDatabase,
     opponent: LobbyPlayer,
     firingRule: String,
-    matchId: String, // [ FIX ]: Added missing parameter here
+    matchId: String,
     availableFlags: List<Flag>,
     onHome: () -> Unit
 ) {
+    val context = LocalContext.current // [ FIX ]: Added Context
+
     // [ LOGIC ]: Setup Repository for ViewModel
     val repository = remember {
         UserRepository(
@@ -79,12 +83,13 @@ fun MatchVsFriend(
     }
 
     val viewModel: MatchVsFriendViewModel = viewModel(
-        factory = MatchVsFriendViewModelFactory(db.userDao(), db.fleetDao(), repository)
+        // [ FIX ]: Passed context to factory
+        factory = MatchVsFriendViewModelFactory(context, db.userDao(), db.fleetDao(), repository)
     )
 
     // [ LOGIC ]: Initialize match with the unique ID
     LaunchedEffect(Unit) {
-        viewModel.initializeMatch(opponent, firingRule, matchId) // [ FIX ]: Passed parameter here
+        viewModel.initializeMatch(opponent, firingRule, matchId)
     }
 
     Modal(viewModel, availableFlags, onHome)

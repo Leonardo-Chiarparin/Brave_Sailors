@@ -1,5 +1,6 @@
 package com.example.brave_sailors.model
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -11,6 +12,7 @@ import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.data.repository.UserRepository
 import com.example.brave_sailors.data.remote.AiNetworkClient
 import com.example.brave_sailors.data.remote.GridRequest
+import com.example.brave_sailors.ui.utils.GameSettingsManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,10 +46,13 @@ data class MatchUiState(
 )
 
 class MatchVsComputerViewModel(
+    context: Context, // [ FIX ]: Context passato per SettingsManager
     private val userDao: UserDao,
     private val fleetDao: FleetDao,
     private val userRepository: UserRepository
 ) : ViewModel() {
+
+    private val settingsManager = GameSettingsManager(context)
 
     private val _uiState = MutableStateFlow(MatchUiState())
     val uiState = _uiState.asStateFlow()
@@ -64,20 +69,18 @@ class MatchVsComputerViewModel(
         this.difficulty = difficulty
         this.firingRule = firingRule
 
-        // --- FIX: IMMEDIATE SYNCHRONOUS RESET ---
-        // We reset the Game Over flags HERE, before the coroutine starts.
-        // This prevents the UI from rendering the old "Game Over" screen while DB is loading.
+        // Avvia Musica (se attiva nelle opzioni)
+        settingsManager.manageMusic(settingsManager.isMusicOn)
+
         _uiState.update {
             it.copy(
                 isGameOver = false,
                 winnerName = "",
                 isPlayerWinner = false,
-                shotsRemaining = 0 // Temporarily 0 until load finishes
+                shotsRemaining = 0
             )
         }
-        // ----------------------------------------
 
-        // 1. CLEAR AI MEMORY AND LOGS
         aiTargetStack.clear()
         aiHitMap.clear()
         moveLogs.clear()
@@ -98,7 +101,6 @@ class MatchVsComputerViewModel(
             placeAiShips(aGrid, aiFleetStruct)
             val aComposition = calculateFleetComposition(aGrid)
 
-            // 2. FINAL STATE UPDATE (With Data)
             _uiState.update {
                 it.copy(
                     playerUser = user,
@@ -111,9 +113,11 @@ class MatchVsComputerViewModel(
                     isPlayerTurn = true,
                     turnNumber = 1,
                     shotsRemaining = calculateShots(true, userFleet.size)
-                    // Note: isGameOver is already false from the sync reset above
                 )
             }
+
+            // Segnala turno giocatore iniziale
+            settingsManager.triggerTurnAlarm()
         }
     }
 
@@ -126,6 +130,9 @@ class MatchVsComputerViewModel(
 
         val isHit = (targetCell.status == CellStatus.SHIP)
         targetCell.status = if (isHit) CellStatus.HIT else CellStatus.MISS
+
+        // [ VIBRAZIONE ]: Se colpito
+        if (isHit) settingsManager.triggerVibration()
 
         var newShots = state.shotsRemaining
         var turnEnds = false
@@ -168,6 +175,7 @@ class MatchVsComputerViewModel(
 
         if (isWin) {
             saveMatchToDb(true)
+            settingsManager.manageMusic(false) // Stop musica
         } else if (turnEnds) {
             switchTurn()
         }
@@ -187,7 +195,10 @@ class MatchVsComputerViewModel(
             )
         }
 
-        if (!nextIsPlayer) {
+        if (nextIsPlayer) {
+            // [ ALARM ]: Tocca al giocatore
+            settingsManager.triggerTurnAlarm()
+        } else {
             viewModelScope.launch {
                 delay(1500)
                 performAiTurn()
@@ -234,6 +245,9 @@ class MatchVsComputerViewModel(
         targetCell.status = if (isHit) CellStatus.HIT else CellStatus.MISS
         aiHitMap.add(r to c)
 
+        // [ VIBRAZIONE ]: Se AI colpisce il giocatore
+        if (isHit) settingsManager.triggerVibration()
+
         if (isHit && difficulty != "Easy") {
             addNeighborsToStack(r, c)
         }
@@ -279,6 +293,7 @@ class MatchVsComputerViewModel(
 
         if (isAiWin) {
             saveMatchToDb(false)
+            settingsManager.manageMusic(false) // Stop musica
         } else if (turnEnds) {
             switchTurn()
         }
@@ -442,6 +457,7 @@ class MatchVsComputerViewModel(
         viewModelScope.launch {
             userRepository.saveMatchRecord(user.id, "$difficulty AI", false, difficulty, moveLogs)
         }
+        settingsManager.manageMusic(false)
     }
 
     private fun saveMatchToDb(isVictory: Boolean) {
@@ -450,9 +466,15 @@ class MatchVsComputerViewModel(
             userRepository.saveMatchRecord(user.id, "$difficulty AI", isVictory, difficulty, moveLogs)
         }
     }
+
+    override fun onCleared() {
+        super.onCleared()
+        settingsManager.releaseMusic()
+    }
 }
 
 class MatchVsComputerViewModelFactory(
+    private val context: Context, // [ FIX ]
     private val userDao: UserDao,
     private val fleetDao: FleetDao,
     private val userRepository: UserRepository
@@ -460,7 +482,7 @@ class MatchVsComputerViewModelFactory(
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MatchVsComputerViewModel::class.java)) {
-            return MatchVsComputerViewModel(userDao, fleetDao, userRepository) as T
+            return MatchVsComputerViewModel(context, userDao, fleetDao, userRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
