@@ -79,8 +79,9 @@ private fun Modal(
     val maxWidth = scale.dp(720f)
     val strokeDp = scale.dp(1f)
 
-    val isGoogleUser = !user?.googleName.isNullOrEmpty()
-    val provider = if (isGoogleUser) "Google" else "Email"
+    val hasLinkedEmail = !user?.registerEmail.isNullOrEmpty()
+    val hasLinkedPassword = !user?.password.isNullOrEmpty()
+    val provider = if (hasLinkedEmail && hasLinkedPassword) "Email" else "Google"
 
     val closeButtonShape = CutCornerShape(bottomStart = scale.dp(34f))
 
@@ -215,7 +216,7 @@ private fun Modal(
                                 Spacer(modifier = Modifier.width(scale.dp(26f)))
 
                                 SecondaryButton(
-                                    paddingH = 34f,
+                                    paddingH = 32f,
                                     paddingV = 20f,
                                     text = "Access",
                                     onClick = onOpenAccess

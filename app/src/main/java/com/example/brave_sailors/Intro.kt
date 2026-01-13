@@ -112,6 +112,8 @@ private fun Modal(viewModel: ProfileViewModel, onFinished: () -> Unit) {
     BackPress { false }
 
     LaunchedEffect(Unit) {
+        viewModel.refreshAuthToken()
+
         val timerJob = async {
             delay(radarDuration / 8)
             statusText = ". retrieve data from server"
@@ -137,15 +139,23 @@ private fun Modal(viewModel: ProfileViewModel, onFinished: () -> Unit) {
                 val request = ImageRequest.Builder(context)
                     .data(loadedUser.profilePictureUrl)
                     .build()
-                imageLoader.execute(request)
+                imageLoader.enqueue(request)
             }
 
-            val userFlag = loadedFlags.find { it.code == loadedUser.countryCode }
+            val userFlag = loadedFlags.find { flag ->
+                val code = loadedUser.countryCode?.trim()
+                if (code != null) {
+                    flag.code.trim().equals(code, ignoreCase = true)
+                } else {
+                    false
+                }
+            }
+
             if (userFlag != null) {
                 val request = ImageRequest.Builder(context)
                     .data(userFlag.flagUrl)
                     .build()
-                imageLoader.execute(request)
+                imageLoader.enqueue(request)
             }
 
             Pair(loadedUser, loadedFlags)

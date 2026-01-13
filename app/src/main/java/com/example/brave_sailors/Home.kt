@@ -13,7 +13,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -67,6 +66,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.imageLoader
 import coil.request.ImageRequest
+import com.example.brave_sailors.data.local.MatchStateStorage
 import com.example.brave_sailors.data.local.database.AppDatabase
 import com.example.brave_sailors.data.remote.api.RetrofitClient
 import com.example.brave_sailors.data.repository.UserRepository
@@ -75,6 +75,7 @@ import com.example.brave_sailors.model.ProfileViewModelFactory
 import com.example.brave_sailors.model.RegisterUiState
 import com.example.brave_sailors.model.RegisterViewModel
 import com.example.brave_sailors.model.RegisterViewModelFactory
+import com.example.brave_sailors.ui.challenge.BilgeScreen
 import com.example.brave_sailors.ui.components.ActiveDialog
 import com.example.brave_sailors.ui.components.Arrow
 import com.example.brave_sailors.ui.components.DialogAccess
@@ -82,6 +83,7 @@ import com.example.brave_sailors.ui.components.DialogDeleteAccount
 import com.example.brave_sailors.ui.components.DialogError
 import com.example.brave_sailors.ui.components.DialogFilter
 import com.example.brave_sailors.ui.components.DialogFlag
+import com.example.brave_sailors.ui.components.DialogFleetConfirm
 import com.example.brave_sailors.ui.components.DialogFriend
 import com.example.brave_sailors.ui.components.DialogInstructions
 import com.example.brave_sailors.ui.components.DialogLoading
@@ -129,39 +131,41 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
 
     var isContentVisible by remember { mutableStateOf(false) }
 
-    // -- DIALOG ( only the required ones, the others are treated differently ) --
+    // -- DIALOG STATE --
     var activeDialog by remember { mutableStateOf<ActiveDialog>(ActiveDialog.None) }
 
-    // -- CHALLENGE STATE --
+    // -- NAVIGATION STATE --
     var overlayChallengeState by remember { mutableStateOf(OverlayChallengeState.IDLE) }
     var targetChallengeState by remember { mutableStateOf(OverlayChallengeState.IDLE) }
 
-    // -- PROFILE STATE --
     var overlayProfileState by remember { mutableStateOf(OverlayProfileState.IDLE) }
     var targetProfileState by remember { mutableStateOf(OverlayProfileState.IDLE) }
 
-    // -- MENU STATE --
     var overlayMenuState by remember { mutableStateOf(OverlayMenuState.IDLE) }
     var targetMenuState by remember { mutableStateOf(OverlayMenuState.IDLE) }
 
-    // -- HOME STATE --
     var overlayHomeState by remember { mutableStateOf(OverlayHomeState.IDLE) }
     var targetHomeState by remember { mutableStateOf(OverlayHomeState.IDLE) }
 
+    // -- MATCH SETTINGS --
     var chosenGameModeIndex by remember { mutableIntStateOf(0) }
     var chosenDifficulty: String? by remember { mutableStateOf("Normal") }
     var chosenFiringRule by remember { mutableStateOf("Chain attacks") }
 
+    // [ LOGIC ]: State to hold the chosen opponent for the online match
+    var selectedOpponent by remember { mutableStateOf<LobbyPlayer?>(null) }
+    var activeMatchId by remember { mutableStateOf<String?>(null) }
+
     // --- DEPENDENCIES & VIEW MODELS ---
-    val db = AppDatabase.getDatabase(context)
+    val db = remember { AppDatabase.getDatabase(context) }
     val api = RetrofitClient.api
 
-    val repository = remember { UserRepository(api, db.userDao(), db.fleetDao(), db.friendDao()) }
+    val repository = remember { UserRepository(api, db.userDao(), db.fleetDao(), db.friendDao(), db.matchDao()) }
 
     val registerViewModel: RegisterViewModel = viewModel(factory = RegisterViewModelFactory(repository))
     val profileViewModel: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(db.userDao(), db.fleetDao(), repository))
 
-    // -- ACCOUNT SETTINGS STATE --
+    // -- USER DATA --
     val uiStateAS = registerViewModel.uiState
 
     val scale = RememberScaleConversion()
@@ -170,10 +174,13 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
 
     // -- USER AND FLAGS --
     val flagList = viewModel.flagList.collectAsState()
-    val user = viewModel.userState.collectAsState()
+    val userState = viewModel.userState.collectAsState()
 
     val availableFlags = flagList.value
-    val entry = user.value
+    val entry = userState.value
+
+    val hasLinkedEmail = !entry?.registerEmail.isNullOrEmpty()
+    val hasLinkedPassword = !entry?.password.isNullOrEmpty()
 
     val forceLogout by viewModel.forceLogoutEvent.collectAsState()
 
@@ -205,34 +212,18 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
         }
         else {
             when {
-                overlayChallengeState == OverlayChallengeState.SHOWING_TORPEDO ||
-                        overlayChallengeState == OverlayChallengeState.SHOWING_CARGO ||
-                        overlayChallengeState == OverlayChallengeState.SHOWING_BILGE -> {
+                overlayChallengeState != OverlayChallengeState.IDLE -> {
                     overlayChallengeState = OverlayChallengeState.IDLE
                     true
                 }
 
                 overlayMenuState != OverlayMenuState.IDLE -> {
-                    overlayMenuState = if (overlayMenuState == OverlayMenuState.SHOWING_OPTIONS ||
-                        overlayMenuState == OverlayMenuState.SHOWING_SETTINGS ||
-                        overlayMenuState == OverlayMenuState.SHOWING_INSTRUCTIONS
-                    ) {
-                        OverlayMenuState.IDLE
-                    } else {
-                        OverlayMenuState.IDLE
-                    }
+                    overlayMenuState = OverlayMenuState.IDLE
                     true
                 }
 
                 overlayProfileState != OverlayProfileState.IDLE -> {
-                    overlayProfileState =
-                        if (overlayProfileState == OverlayProfileState.SHOWING_STATS ||
-                            overlayProfileState == OverlayProfileState.SHOWING_RANKINGS
-                        ) {
-                            OverlayProfileState.IDLE
-                        } else {
-                            OverlayProfileState.IDLE
-                        }
+                    overlayProfileState = OverlayProfileState.IDLE
                     true
                 }
 
@@ -267,13 +258,14 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
     LaunchedEffect(viewModel.showHomeWelcome, entry) {
         if (viewModel.showHomeWelcome && entry != null) {
             launch(Dispatchers.IO) {
-                val photoUrl = entry.googlePhotoUrl
 
-                if (!photoUrl.isNullOrEmpty()) {
-                    val request = ImageRequest.Builder(context)
-                        .data(photoUrl)
-                        .build()
-                    context.imageLoader.execute(request)
+                entry.googlePhotoUrl?.let { url ->
+                    if (url.isNotEmpty()) {
+                        val request = ImageRequest.Builder(context)
+                            .data(url)
+                            .build()
+                        context.imageLoader.execute(request)
+                    }
                 }
 
                 showGooglePopup = true
@@ -289,8 +281,22 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
 
     // Security check: perform logout if session expires or conflicts are detected
     if (forceLogout) {
-        viewModel.performLocalLogout()
-        onRestart()
+        LaunchedEffect(Unit) {
+            viewModel.removeSessionListener()
+
+            MatchStateStorage.clear(context)
+
+            try {
+                val credentialManager = CredentialManager.create(context)
+                credentialManager.clearCredentialState(ClearCredentialStateRequest())
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            repository.clearAllLocalData()
+
+            onRestart()
+        }
     }
 
     LaunchedEffect(uiStateAS) {
@@ -298,8 +304,13 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
             is RegisterUiState.Success -> {
                 registerViewModel.resetState()
 
-                if (activeDialog == ActiveDialog.Access)
+                if (activeDialog is ActiveDialog.Register)
+                    activeDialog = ActiveDialog.None
+
+                if (activeDialog is ActiveDialog.Access) {
+                    activeDialog = ActiveDialog.None
                     onRestart()
+                }
             }
 
             is RegisterUiState.Error -> {
@@ -330,9 +341,7 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                 .fillMaxSize(),
             containerColor = Color.Transparent,
             bottomBar = {
-                val isPlayingMiniGame = overlayChallengeState == OverlayChallengeState.SHOWING_TORPEDO ||
-                        overlayChallengeState == OverlayChallengeState.SHOWING_CARGO ||
-                        overlayChallengeState == OverlayChallengeState.SHOWING_BILGE
+                val isPlayingMiniGame = overlayChallengeState != OverlayChallengeState.IDLE
 
                 AnimatedVisibility(
                     visible = overlayHomeState == OverlayHomeState.IDLE && !isPlayingMiniGame,
@@ -390,34 +399,30 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
-                        // -- GAME MODE'S DETAILS --
+                        // -- GAME MODE DETAILS --
                         AnimatedVisibility(
                             visible = overlayHomeState == OverlayHomeState.SHOWING_DETAILS,
                             enter = fadeIn(animationSpec = tween(300)),
                             exit = fadeOut(animationSpec = tween(200))
                         ) {
                             GameModeDetailsScreen(
+                                db = db,
                                 gameModeIndex = chosenGameModeIndex,
                                 onBack = { overlayHomeState = OverlayHomeState.IDLE },
                                 onContinue = { difficulty, rule ->
                                     chosenDifficulty = difficulty
                                     chosenFiringRule = rule
 
-                                    // if 0 -> playing match against computer
-                                    // if 1 -> DialogDeployment -> Formation for guest 2
-                                    // if 2 -> Lobby
-                                    when (chosenGameModeIndex) {
+                                    overlayHomeState = OverlayHomeState.EXITING_DETAILS
+                                    targetHomeState = when (chosenGameModeIndex) {
                                         0 -> {
-                                            overlayHomeState = OverlayHomeState.EXITING_DETAILS
-                                            targetHomeState = OverlayHomeState.PLAYING_VS_COMPUTER
+                                            OverlayHomeState.PLAYING_VS_COMPUTER
                                         }
                                         1 -> {
-                                            overlayHomeState = OverlayHomeState.EXITING_DETAILS
-                                            targetHomeState = OverlayHomeState.SHOWING_GUEST_FLEET
+                                            OverlayHomeState.SHOWING_GUEST_FLEET
                                         }
-                                        2 -> {
-                                            overlayHomeState = OverlayHomeState.EXITING_DETAILS
-                                            targetHomeState = OverlayHomeState.SHOWING_LOBBY
+                                        else -> {
+                                            OverlayHomeState.SHOWING_LOBBY
                                         }
                                     }
 
@@ -425,7 +430,7 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
-                        // -- FLEET GUEST --
+                        // -- GUEST FLEET DEPLOYMENT --
                         AnimatedVisibility(
                             visible = overlayHomeState == OverlayHomeState.SHOWING_GUEST_FLEET,
                             enter = fadeIn(animationSpec = tween(300)),
@@ -437,8 +442,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                                     overlayHomeState = OverlayHomeState.SHOWING_DETAILS
                                 },
                                 onStartMatch = { rule ->
-                                    // [ TO - DO ]: Show the DialogTurn regarding the first player that has to move, then the grid must be displayed. Add the remaining parameters ( e.g., the user's data, etc. )
-
                                     chosenFiringRule = rule
 
                                     overlayHomeState = OverlayHomeState.EXITING_GUEST_FLEET
@@ -453,18 +456,29 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             enter = fadeIn(animationSpec = tween(300)),
                             exit = fadeOut(animationSpec = tween(200))
                         ) {
+                            LaunchedEffect(Unit) {
+                                selectedOpponent = null
+                                activeMatchId = null
+                            }
+
                             GameLobbyScreen(
+                                db = db,
                                 availableFlags = availableFlags,
+                                selectedFiringRule = chosenFiringRule,
                                 onBack = {
                                     overlayHomeState = OverlayHomeState.SHOWING_DETAILS
                                 },
-                                onChosenPlayer = {
-                                    // [ TO - DO ]: Store the information regarding the chosen opponent
+                                onMatchStart = { opponent, matchId ->
+                                    selectedOpponent = opponent
+                                    activeMatchId = matchId
 
-                                    overlayHomeState = OverlayHomeState.LOADING_MATCH
+                                    overlayHomeState = OverlayHomeState.PLAYING_VS_FRIEND
                                 }
                             )
                         }
+
+                        val context = LocalContext.current
+                        val db = remember { AppDatabase.getDatabase(context) }
 
                         // -- PLAYING VS COMPUTER --
                         AnimatedVisibility(
@@ -472,76 +486,63 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             enter = fadeIn(animationSpec = tween(300)),
                             exit = fadeOut(animationSpec = tween(200))
                         ) {
-                            // [ TO - DO ]: Add the remaining parameters, especially the ones related to the player's formation
                             MatchVsComputerScreen(
+                                db = db,
+                                profileViewModel = profileViewModel,
                                 difficulty = chosenDifficulty ?: "Normal",
                                 firingRule = chosenFiringRule,
                                 user = entry,
                                 flag = availableFlags.find { it.code == entry?.countryCode },
                                 onRetire = {
-                                    // [ TO - DO ]: The loss must be registered using the profileViewModel
-                                    // e.g., viewModel.update...
-
                                     overlayHomeState = OverlayHomeState.IDLE
                                 },
-                                onComplete = { isVictory ->
-                                    // [ TO - DO ]: Update the user's statistics regarding the amount of matches he/she played, number of victories or losses ( according to the boolean isVictory ), and so on
-                                    // e.g., viewModel.update...
-
+                                onComplete = {
                                     overlayHomeState = OverlayHomeState.IDLE
                                 }
                             )
                         }
 
-                        // -- MATCH VS GUEST --
+                        // -- PLAYING VS GUEST --
                         AnimatedVisibility(
                             visible = overlayHomeState == OverlayHomeState.PLAYING_VS_GUEST,
                             enter = fadeIn(animationSpec = tween(300)),
                             exit = fadeOut(animationSpec = tween(200))
                         ) {
-                            // ...
                             MatchVsGuestScreen(
+                                profileViewModel = profileViewModel,
                                 firingRule = chosenFiringRule,
                                 user = entry,
                                 flag = availableFlags.find { it.code == entry?.countryCode },
                                 onRetire = {
-                                    // ...
-
                                     overlayHomeState = OverlayHomeState.IDLE
                                 },
-                                onComplete = { isPlayer1Winner ->
-                                    // ...
-
+                                onComplete = {
                                     overlayHomeState = OverlayHomeState.IDLE
                                 }
                             )
                         }
 
-                        // -- MATCH VS FRIEND --
+                        // -- PLAYING VS FRIEND ( ONLINE ) --
                         AnimatedVisibility(
-                            visible = overlayHomeState == OverlayHomeState.PLAYING_VS_FRIEND,
+                            visible = overlayHomeState == OverlayHomeState.PLAYING_VS_FRIEND && selectedOpponent != null,
                             enter = fadeIn(animationSpec = tween(300)),
                             exit = fadeOut(animationSpec = tween(200))
                         ) {
-                            // ...
-                            // The below page is analogous to the MatchVsComputer one, except for the fact that the game is provided remotely among the two kiths ( however the inner animations, dimensions, and other graphical stuff are basically the same )
-                            /*
-                                MatchVsFriendScreen(
-                                    firingRule = chosenFiringRule,
-                                    user = entry,
-                                    flag = availableFlags.find { it.code == entry?.countryCode },
-                                    onRetire = {
-                                        // ...
-
-                                        overlayHomeState = OverlayHomeState.IDLE
-                                    },
-                                    onComplete = { isVictory ->
-                                        // ...
-
-                                        overlayHomeState = OverlayHomeState.IDLE
-                                    }
-                                )
-                             */
+                            selectedOpponent?.let { currentOpponent ->
+                                activeMatchId?.let { matchId ->
+                                    MatchVsFriendScreen(
+                                        db = db,
+                                        profileViewModel = profileViewModel,
+                                        opponent = currentOpponent,
+                                        firingRule = chosenFiringRule,
+                                        matchId = matchId,
+                                        availableFlags = availableFlags,
+                                        onHome = {
+                                            overlayHomeState = OverlayHomeState.IDLE
+                                        }
+                                    )
+                                }
+                            }
                         }
 
                     }
@@ -638,9 +639,12 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                                 animationSpec = tween(durationMillis = 200)
                             ) + fadeOut(animationSpec = tween(200))
                         ) {
-                            // [ TO - DO ]: Set up the configuration using a proper viewModel
                             GameOptionsScreen(
-                                onBack = { overlayMenuState = OverlayMenuState.IDLE }
+                                viewModel = viewModel,
+                                onBack = { overlayMenuState = OverlayMenuState.IDLE },
+                                onGetAiPhoto = { uri ->
+                                    activeDialog = ActiveDialog.AiFilter(uri)
+                                }
                             )
                         }
 
@@ -659,19 +663,24 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                                 user = entry,
                                 onBack = { overlayMenuState = OverlayMenuState.IDLE },
                                 onOpenPasswordRecovery = {
-                                    activeDialog = if (!entry?.googleName.isNullOrEmpty()) {
-                                        ActiveDialog.Error("The user has no password to recover.", DialogSource.NONE)
-                                    } else {
-                                        ActiveDialog.Password(entry?.email ?: "")
-                                    }
+                                   activeDialog = ActiveDialog.Password(entry?.registerEmail ?: "Type here...")
                                 },
-                                onOpenRegister = { activeDialog = ActiveDialog.Register },
+                                onOpenRegister = {
+                                    activeDialog = if (!hasLinkedEmail || !hasLinkedPassword)
+                                        ActiveDialog.Register
+                                    else
+                                        ActiveDialog.Error("The account is already linked to: ${entry.registerEmail}.", DialogSource.NONE)
+                                },
                                 onOpenAccess = { activeDialog = ActiveDialog.Access },
                                 onOpenDeleteAccount = {
-                                    activeDialog = if (entry != null)
+                                    activeDialog = if (hasLinkedEmail && hasLinkedPassword) {
                                         ActiveDialog.DeleteAccount
-                                    else
-                                        ActiveDialog.Error("No active user could be deleted.", DialogSource.ACCESS)
+                                    } else {
+                                        ActiveDialog.Error(
+                                            "The account has not been registered yet, therefore it cannot be deleted.",
+                                            DialogSource.NONE
+                                        )
+                                    }
                                 }
                             )
                         }
@@ -684,25 +693,29 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                         ) {
                             FleetScreen(
                                 db = db,
-                                repository = repository
+                                repository = repository,
+                                onConfirm = {
+                                    activeDialog = ActiveDialog.Deployment
+                                }
                             )
                         }
                     }
                     NavigationItem.Game -> {
                         LaunchedEffect(overlayChallengeState) {
-                            if (overlayChallengeState == OverlayChallengeState.EXITING_CHALLENGE ) {
+                            if (overlayChallengeState == OverlayChallengeState.EXITING_CHALLENGE) {
                                 delay(200)
                                 overlayChallengeState = targetChallengeState
                             }
                         }
 
-                        // -- CHALLENGES --
+                        // -- CHALLENGES MENU --
                         AnimatedVisibility(
                             visible = overlayChallengeState == OverlayChallengeState.IDLE,
                             enter = fadeIn(animationSpec = tween(300)),
                             exit = fadeOut(animationSpec = tween(200))
                         ) {
                             ChallengeScreen(
+                                viewModel = profileViewModel,
                                 onOpenTorpedo = {
                                     overlayChallengeState = OverlayChallengeState.EXITING_CHALLENGE
                                     overlayChallengeState = OverlayChallengeState.SHOWING_TORPEDO
@@ -724,24 +737,54 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             enter = fadeIn(animationSpec = tween(300)),
                             exit = fadeOut(animationSpec = tween(200))
                         ) {
-                            /*
-                                TorpedoScreen(
-                                    ...,
-                                    onGameResult = { isWin ->
-                                        // [ TO - DO ]: Apply the correct logic to update the user's statistics
-
-                                        overlayChallengeState = OverlayChallengeState.IDLE
+                            TorpedoScreen(
+                                onGameResult = { isWin ->
+                                    if (isWin) {
+                                        // [ ACTION ]: Reward the player with XP and Score
+                                        entry?.let { user ->
+                                            profileViewModel.addMiniGameWinReward(user.id)
+                                        }
                                     }
-                                )
-                            */
+                                    overlayChallengeState = OverlayChallengeState.IDLE
+                                }
+                            )
                         }
 
                         // -- CARGO --
-                        // [ TO - DO ]: Same as "Torpedo", except for the amount of cooldown, exp., and so on
+                        AnimatedVisibility(
+                            visible = overlayChallengeState == OverlayChallengeState.SHOWING_CARGO,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(200))
+                        ) {
+                            CargoScreen(
+                                onGameResult = { isWin ->
+                                    if (isWin) {
+                                        entry?.let { user ->
+                                            profileViewModel.addMiniGameWinReward(user.id)
+                                        }
+                                    }
+                                    overlayChallengeState = OverlayChallengeState.IDLE
+                                }
+                            )
+                        }
 
                         // -- BILGE --
-                        // ...
-
+                        AnimatedVisibility(
+                            visible = overlayChallengeState == OverlayChallengeState.SHOWING_BILGE,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(200))
+                        ) {
+                            BilgeScreen(
+                                onGameResult = { isWin ->
+                                    if (isWin) {
+                                        entry?.let { user ->
+                                            profileViewModel.addMiniGameWinReward(user.id)
+                                        }
+                                    }
+                                    overlayChallengeState = OverlayChallengeState.IDLE
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -756,26 +799,15 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                     .padding(top = scale.dp(98f))
                     .zIndex(2f),
                 avatar = {
-                    if (entry.googlePhotoUrl.isNullOrEmpty() || entry.googlePhotoUrl == "ic_terms") {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_terms),
-                            contentDescription = "avatar",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        AsyncImage(
-                            model = entry.googlePhotoUrl,
-                            error = painterResource(id = R.drawable.ic_terms),
-                            contentDescription = "avatar",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
+                    AsyncImage(
+                        model = entry.googlePhotoUrl,
+                        error = painterResource(id = R.drawable.ic_terms),
+                        contentDescription = "avatar",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
                 },
                 content = {
                     Column(
@@ -835,9 +867,9 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
         }
     }
 
-    // -- DIALOGS --
+    // -- DIALOGS HANDLER --
     when (val currentDialog = activeDialog) {
-        is ActiveDialog.None -> {}
+        is ActiveDialog.None -> {  }
 
         // -- PROFILE DIALOGS --
         is ActiveDialog.Filter -> {
@@ -879,9 +911,10 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                 onDismiss = { activeDialog = ActiveDialog.None },
                 onConfirm = { friendId ->
                     viewModel.sendFriendRequest(friendId) { success, message ->
-                        if (!success) {
-                            activeDialog = ActiveDialog.Error(message, DialogSource.FRIEND)
-                        }
+                        activeDialog = if (!success) {
+                            ActiveDialog.Error(message, DialogSource.FRIEND)
+                        } else
+                            ActiveDialog.None
                     }
                 }
             )
@@ -902,7 +935,7 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
             
             DialogAccess(
                 onDismiss = { activeDialog = ActiveDialog.None; registerViewModel.resetState() },
-                onConfirm = { email, password -> registerViewModel.login(email, password) },
+                onConfirm = { email, password -> registerViewModel.login(context, email, password) },
                 isLoading = isLoading
             )
         }
@@ -928,9 +961,10 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                 DialogDeleteAccount(
                     onDismiss = { activeDialog = ActiveDialog.None },
                     onConfirm = {
-                        profileViewModel.deleteAccount(entry) { success ->
+                        profileViewModel.deleteAccount(entry) { success, errorMessage ->
                             if (success) {
-                                activeDialog = ActiveDialog.None
+                                MatchStateStorage.clear(context)
+
                                 coroutineScope.launch {
                                     try {
                                         val credentialManager = CredentialManager.create(context)
@@ -944,14 +978,35 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                                     }
                                 }
                             } else {
+                                val finalMessage = errorMessage ?: "Failed to delete the account."
+
                                 activeDialog = ActiveDialog.Error(
-                                    "Failed to delete the account.",
+                                    finalMessage,
                                     DialogSource.DELETE
                                 )
                             }
                         }
                     }
                 )
+            }
+        }
+
+        // -- GAME OPTIONS DIALOGS --
+        is ActiveDialog.AiFilter -> {
+            DialogFilter(
+                imageUri = currentDialog.uri,
+                onDismiss = { activeDialog = ActiveDialog.None },
+                onConfirm = { bitmap ->
+                    profileViewModel.updateAiAvatar(context, bitmap)
+                    activeDialog = ActiveDialog.None
+                }
+            )
+        }
+
+        // -- ARMADA DIALOGS --
+        is ActiveDialog.Deployment -> {
+            DialogFleetConfirm {
+                activeDialog = ActiveDialog.None
             }
         }
 

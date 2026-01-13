@@ -1,5 +1,6 @@
 package com.example.brave_sailors
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -32,8 +33,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,13 +56,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.components.GoButton
 import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.theme.DarkBlue
+import com.example.brave_sailors.ui.theme.Grey
 import com.example.brave_sailors.ui.theme.LightBlue
+import com.example.brave_sailors.ui.theme.LightGrey
 import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 enum class OverlayChallengeState {
     IDLE,
@@ -69,12 +78,22 @@ enum class OverlayChallengeState {
 }
 
 @Composable
-fun ChallengeScreen(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilge: () -> Unit) {
-    Modal(onOpenTorpedo, onOpenCargo, onOpenBilge)
+fun ChallengeScreen(
+    viewModel: ProfileViewModel,
+    onOpenTorpedo: () -> Unit,
+    onOpenCargo: () -> Unit,
+    onOpenBilge: () -> Unit
+) {
+    Modal(viewModel, onOpenTorpedo, onOpenCargo, onOpenBilge)
 }
 
 @Composable
-private fun Modal(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilge: () -> Unit) {
+private fun Modal(
+    viewModel: ProfileViewModel,
+    onOpenTorpedo: () -> Unit,
+    onOpenCargo: () -> Unit,
+    onOpenBilge: () -> Unit
+) {
     val scale = RememberScaleConversion()
     val maxWidth = scale.dp(720f)
     val strokeDp = scale.dp(1f)
@@ -82,6 +101,25 @@ private fun Modal(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilg
     var expandedIndexTorpedo by remember { mutableIntStateOf(-1) }
     var expandedIndexCargo by remember { mutableIntStateOf(-1) }
     var expandedIndexBilge by remember { mutableIntStateOf(-1) }
+
+    val userState by viewModel.userState.collectAsState()
+
+    var cooldownMs by remember { mutableLongStateOf(viewModel.getCooldownRemaining()) }
+
+    LaunchedEffect(userState) {
+        while (isActive) {
+            val remaining = viewModel.getCooldownRemaining()
+            cooldownMs = remaining
+
+            if (remaining <= 0L) {
+                delay(2000)
+            } else {
+                delay(1000)
+            }
+        }
+    }
+
+    val isLocked = cooldownMs > 0
 
     Box(
         modifier = Modifier
@@ -129,9 +167,11 @@ private fun Modal(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilg
                             item {
                                 ChallengeItem(
                                     title = "Stealth Mission: TORPEDO RUN",
-                                    description = "Guide a depth charge using the gyroscope.",
+                                    description = if (isLocked) "Systems recharging..." else "Guide a depth charge using the gyroscope.",
                                     isExpanded = expandedIndexTorpedo == 0,
                                     icon = Icons.Default.Explore,
+                                    isLocked = isLocked,
+                                    cooldownTime = cooldownMs,
                                     onToggle = {
                                         expandedIndexTorpedo = if (expandedIndexTorpedo == 0) -1 else 0
                                     },
@@ -142,9 +182,11 @@ private fun Modal(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilg
                             item {
                                 ChallengeItem(
                                     title = "Balance test: CARGO HOLD",
-                                    description = "Keep the ammo crate steady in rough seas.",
+                                    description = if (isLocked) "Systems recharging..." else "Keep the ammo crate steady in rough seas.",
                                     isExpanded = expandedIndexCargo == 0,
                                     icon = Icons.Default.CheckBoxOutlineBlank,
+                                    isLocked = isLocked,
+                                    cooldownTime = cooldownMs,
                                     onToggle = {
                                         expandedIndexCargo = if (expandedIndexCargo == 0) -1 else 0
                                     },
@@ -155,9 +197,11 @@ private fun Modal(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilg
                             item {
                                 ChallengeItem(
                                     title = "Field check: BILGE PUMP",
-                                    description = "Shake the device to expel water.",
+                                    description = if (isLocked) "Systems recharging..." else "Shake the device to expel water.",
                                     isExpanded = expandedIndexBilge == 0,
                                     icon = Icons.Default.Water,
+                                    isLocked = isLocked,
+                                    cooldownTime = cooldownMs,
                                     onToggle = {
                                         expandedIndexBilge = if (expandedIndexBilge == 0) -1 else 0
                                     },
@@ -172,12 +216,15 @@ private fun Modal(onOpenTorpedo: () -> Unit, onOpenCargo: () -> Unit, onOpenBilg
     }
 }
 
+@SuppressLint("DefaultLocale")
 @Composable
 private fun ChallengeItem(
     title: String,
     description: String,
     isExpanded: Boolean,
     icon: ImageVector,
+    isLocked: Boolean,
+    cooldownTime: Long,
     onToggle: () -> Unit,
     onGo: () -> Unit
 ) {
@@ -192,6 +239,17 @@ private fun ChallengeItem(
         bottomStart = maxCornerSize,
         topEnd = maxCornerSize
     )
+
+    // Formatting timer string for the locked state UI
+    val timerString = remember(cooldownTime) {
+        if (cooldownTime <= 0) "00:00"
+        else {
+            val totalSeconds = cooldownTime / 1000
+            val m = totalSeconds / 60
+            val s = totalSeconds % 60
+            "${if (m < 10) "0$m" else "$m"}:${if (s < 10) "0$s" else "$s"}"
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -213,31 +271,55 @@ private fun ChallengeItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Orange,
+                tint = if (isLocked) Grey else Orange,
                 modifier = Modifier
                     .size(scale.dp(50f))
             )
 
             Spacer(modifier = Modifier.width(scale.dp(16f)))
 
-            Text(
-                text = title,
-                color = White,
-                fontSize = scale.sp(28f),
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = scale.sp(2f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = TextStyle(
-                    platformStyle = PlatformTextStyle(includeFontPadding = false),
-                    lineHeightStyle = LineHeightStyle(
-                        LineHeightStyle.Alignment.Center,
-                        LineHeightStyle.Trim.Both
-                    ),
-                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = if (isLocked) LightGrey else White,
+                    fontSize = scale.sp(28f),
+                    fontFamily = FontFamily.SansSerif,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = scale.sp(2f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle = LineHeightStyle(
+                            LineHeightStyle.Alignment.Center,
+                            LineHeightStyle.Trim.Both
+                        ),
+                        shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                    )
                 )
-            )
+
+                // Show timer if it is still locked
+                if (isLocked) {
+                    Text(
+                        text = "Reloading: $timerString",
+                        color = Color(0xFFFE0000),
+                        fontSize = scale.sp(16f),
+                        fontFamily = FontFamily.SansSerif,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = scale.sp(2f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(
+                            platformStyle = PlatformTextStyle(includeFontPadding = false),
+                            lineHeightStyle = LineHeightStyle(
+                                LineHeightStyle.Alignment.Center,
+                                LineHeightStyle.Trim.Both
+                            ),
+                            shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                        )
+                    )
+                }
+            }
         }
 
         AnimatedVisibility(
@@ -254,7 +336,7 @@ private fun ChallengeItem(
 
                 Text(
                     text = description,
-                    color = White,
+                    color = if (isLocked) LightGrey else White,
                     textAlign = TextAlign.Center,
                     fontSize = scale.sp(26f),
                     fontFamily = FontFamily.SansSerif,
@@ -275,7 +357,7 @@ private fun ChallengeItem(
                 Box(
                     modifier = Modifier.align(Alignment.End)
                 ) {
-                    GoButton(onClick = onGo)
+                    GoButton(enabled = !isLocked, onClick = onGo)
                 }
 
                 Spacer(modifier = Modifier.height(scale.dp(14f)))

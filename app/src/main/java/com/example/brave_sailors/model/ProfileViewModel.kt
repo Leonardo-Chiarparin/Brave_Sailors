@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.brave_sailors.R
+import com.example.brave_sailors.data.local.MatchStateStorage
 import com.example.brave_sailors.data.local.database.FleetDao
 import com.example.brave_sailors.data.local.database.UserDao
 import com.example.brave_sailors.data.local.database.entity.User
@@ -14,7 +15,10 @@ import com.example.brave_sailors.data.remote.api.Flag
 import com.example.brave_sailors.data.remote.api.RetrofitClient
 import com.example.brave_sailors.data.repository.UserRepository
 import com.example.brave_sailors.data.local.database.entity.RankingPlayer
+import com.example.brave_sailors.data.local.database.entity.SavedShip
+import com.example.brave_sailors.ui.utils.GameSettingsManager
 import com.google.android.gms.tasks.Tasks
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
@@ -27,19 +31,26 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 
+enum class MatchType {
+    COMPUTER,
+    GUEST,
+    FRIEND
+}
+
 class ProfileViewModel(
     private val userDao: UserDao,
+    private val fleetDao: FleetDao,
     private val userRepository: UserRepository
 ) : ViewModel() {
 
     // -- User State (REACTIVE) --
-    // This connects directly to the local Room Database.
-    // When the user logs in or updates their profile, this flow emits the new data automatically.
+    // Observes the local room database through the repository
     val userState: StateFlow<User?> = userRepository.getUserFlow()
         .stateIn(
             scope = viewModelScope,
@@ -81,6 +92,7 @@ class ProfileViewModel(
     private val database = FirebaseDatabase.getInstance()
     private var sessionListener: ValueEventListener? = null
     private var monitoredUserId: String? = null
+    private var monitoredSessionToken: String? = null
 
     var showHomeWelcome: Boolean = true
 
@@ -94,12 +106,107 @@ class ProfileViewModel(
         // Automatically starts observing session token when a user logs in (userState becomes non-null)
         viewModelScope.launch {
             userState.collectLatest { user ->
-                if (user != null && !user.sessionToken.isNullOrEmpty()) {
-                    startSessionObserver(user.id, user.sessionToken)
-                } else {
+                if (user != null) {
+                    if (!user.sessionToken.isNullOrEmpty()) {
+                        startSessionObserver(user.id, user.sessionToken)
+                    } else {
+                        removeSessionListener()
+                    }
+
+                    userRepository.observeFriendsLive(user.id)
+                }
+                else
                     removeSessionListener()
+            }
+        }
+    }
+
+    // -- MATCH STATE MANAGEMENT (TIMEOUT LOGIC) --
+    fun setMatchActive(context: Context, matchId: String, opponentName: String?, type: MatchType) {
+        MatchStateStorage.saveState(
+            context,
+            matchId,
+            opponentName ?: "Unknown",
+            type,
+            true
+        )
+    }
+
+    fun updateActiveTurn(context: Context, isPlayerOneTurn: Boolean) {
+        MatchStateStorage.updateTurn(context, isPlayerOneTurn)
+    }
+
+    /**
+     * Clear the state of the active match when it ends correctly ( no crash / timeout ).
+     */
+    fun clearActiveMatch(context: Context) {
+        MatchStateStorage.clear(context)
+    }
+
+    /**
+     * Called by MainActivity when the app stays in the background for too long ( > 60 seconds ). It results in an immediate loss for the player
+     */
+    fun handleTimeoutForfeit(context: Context) {
+        val appContext = context.applicationContext
+        val savedState = MatchStateStorage.getState(appContext) ?: return
+
+        val settingsManager = GameSettingsManager(appContext)
+        settingsManager.manageMusic(false)
+        settingsManager.releaseResources()
+
+        val matchId = savedState.matchId
+        val opponent = savedState.opponent
+        val type = savedState.type
+        val p1Turn = savedState.isP1Turn
+
+        if (type == MatchType.GUEST && !p1Turn) {
+            MatchStateStorage.clear(context)
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val user = userDao.getCurrentUser()
+
+            if (user != null) {
+                if (type == MatchType.FRIEND) {
+                    try {
+                        val statusSnapshot = Tasks.await(database.getReference("matches").child(matchId).child("status").get())
+                        val status = statusSnapshot.getValue(String::class.java)
+
+                        val isAlreadyClosed = (status != null && (
+                            status.startsWith("timeout_", ignoreCase = true)
+                                    || status.startsWith("surrender_", ignoreCase = true)
+                                    || status.startsWith("winner_", ignoreCase = true)
+                            )
+                        )
+
+                        if (!isAlreadyClosed)
+                            database.getReference("matches").child(matchId).child("status").setValue("surrender_${user.id}")
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                val difficultyLabel = when (type) {
+                    MatchType.FRIEND -> "Online (Timeout)"
+                    MatchType.COMPUTER -> "AI (Timeout)"
+                    MatchType.GUEST -> "Guest (Timeout)"
+                }
+
+                try {
+                    userRepository.saveMatchRecord(
+                        userId = user.id,
+                        opponentName = opponent,
+                        isVictory = false,
+                        difficulty = difficultyLabel,
+                        moves = emptyList()
+                    )
+                } catch (e: Exception) {
+                    Log.e("ProfileViewModel", "Failed to save local match record: ${e.message}")
                 }
             }
+
+            MatchStateStorage.clear(context)
         }
     }
 
@@ -115,29 +222,128 @@ class ProfileViewModel(
         }
     }
 
+    fun refreshAuthToken() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val firebaseUser = FirebaseAuth.getInstance().currentUser
+
+            if (firebaseUser != null) {
+                try {
+                    Tasks.await(firebaseUser.reload())
+                    Log.d("Auth", "Token has been refreshed successfully.")
+                } catch (e: Exception) {
+                    Log.e("Auth", "Token could not be refreshed: ${e.message}")
+                }
+            }
+        }
+    }
+
     /**
-     * Initializes the user session token.
+     * Initializes the user session token and updates both Cloud and Local DB.
      */
-    fun initializeSession(user: User, isNewUser: Boolean, onComplete: (User) -> Unit) {
+    fun initializeSession(user: User, onComplete: (User, Boolean) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             val newToken = UUID.randomUUID().toString()
-            val updatedUser = user.copy(sessionToken = newToken)
+            val userRef = database.getReference("users").child(user.id)
+
+            var isActuallyNewUser = false
 
             try {
-                val userRef = database.getReference("users").child(user.id)
-                Tasks.await(userRef.child("sessionToken").setValue(newToken))
+                val snapshot = Tasks.await(userRef.get())
 
-                if (!isNewUser) {
-                    userDao.insertUser(updatedUser)
+                if (snapshot.exists())
+                    userRef.child("sessionToken").setValue(newToken).await()
+
+                var fleetToSave: List<SavedShip> = emptyList()
+
+                val userToSave: User = if (snapshot.exists()) {
+                    val profile = snapshot.child("profile")
+
+                    val info = profile.child("info")
+                    val progression = profile.child("progression")
+                    val ranking = profile.child("ranking")
+                    val statistics = profile.child("statistics")
+
+                    val remoteUser = User(
+                        id = user.id,
+
+                        email = info.child("email").getValue(String::class.java) ?: user.email,
+
+                        name = info.child("name").getValue(String::class.java) ?: user.name,
+                        profilePictureUrl = info.child("profilePictureUrl").getValue(String::class.java) ?: "ic_terms",
+
+                        googleName = user.googleName,
+                        googlePhotoUrl = user.googlePhotoUrl,
+
+                        aiAvatarPath = user.aiAvatarPath ?: "ic_ai_avatar_placeholder",
+
+                        registerEmail = info.child("registerEmail").getValue(String::class.java) ?: user.registerEmail,
+                        password = info.child("password").getValue(String::class.java) ?: user.password,
+
+                        countryCode = info.child("countryCode").getValue(String::class.java) ?: user.countryCode,
+
+                        level = progression.child("level").getValue(Int::class.java) ?: 1,
+                        currentXp = progression.child("currentXp").getValue(Int::class.java) ?: 0,
+                        lastWinTimestamp = progression.child("lastWinTimestamp").getValue(Long::class.java) ?: 0L,
+
+                        totalScore = ranking.child("totalScore").getValue(Long::class.java) ?: 0,
+
+                        wins = statistics.child("wins").getValue(Int::class.java) ?: 0,
+                        losses = statistics.child("losses").getValue(Int::class.java) ?: 0,
+                        shipsDestroyed = statistics.child("shipsDestroyed").getValue(Int::class.java) ?: 0,
+                        totalShotsFired = statistics.child("totalShotsFired").getValue(Long::class.java) ?: 0,
+                        totalShotsHit = statistics.child("totalShotsHit").getValue(Long::class.java) ?: 0,
+
+                        sessionToken = newToken,
+                        lastUpdated = info.child("lastUpdated").getValue(Long::class.java) ?: System.currentTimeMillis()
+                    )
+
+                    val fleetSnapshot = snapshot.child("fleet")
+                    val tempFleetList = mutableListOf<SavedShip>()
+
+                    if (fleetSnapshot.exists()) {
+                        for (shipSnap in fleetSnapshot.children) {
+                            val ship = SavedShip(
+                                userId = user.id,
+                                shipId = (shipSnap.child("shipId").value as? Number)?.toInt() ?: 0,
+                                size = (shipSnap.child("size").value as? Number)?.toInt() ?: 1,
+                                row = (shipSnap.child("row").value as? Number)?.toInt() ?: 0,
+                                col = (shipSnap.child("col").value as? Number)?.toInt() ?: 0,
+                                isHorizontal = shipSnap.child("isHorizontal").getValue(Boolean::class.java) ?: true
+                            )
+
+                            tempFleetList.add(ship)
+                        }
+                    }
+
+                    fleetToSave = tempFleetList
+
+                    remoteUser
+                }
+                else {
+                    isActuallyNewUser = true
+                    user.copy(sessionToken = newToken)
                 }
 
-                Log.d("Session", "Token updated: $newToken")
+                userDao.insertUser(userToSave)
+
+                if (fleetToSave.isNotEmpty()) {
+                    fleetDao.clearUserFleet(user.id)
+                    fleetDao.saveFleet(fleetToSave)
+                    Log.d("Session", "Fleet restored correctly after user insert.")
+                }
+
+                if (isActuallyNewUser)
+                    userRepository.syncLocalToCloud(userToSave.id)
+
+                withContext(Dispatchers.Main) {
+                    onComplete(userToSave, isActuallyNewUser)
+                }
             } catch (e: Exception) {
                 Log.e("Session", "Error while inserting the token: ${e.message}")
-            }
 
-            withContext(Dispatchers.Main) {
-                onComplete(updatedUser)
+                withContext(Dispatchers.Main) {
+                    onComplete(user.copy(sessionToken = newToken), true)
+                }
             }
         }
     }
@@ -172,14 +378,35 @@ class ProfileViewModel(
         }
     }
 
+    /**
+     * Updates game-related stats (XP and Level) and syncs to cloud.
+     */
+    fun updateGameStats(id: String, level: Int, xp: Int, timestamp: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                userDao.updateGameStats(id, level, xp, timestamp)
+                userRepository.syncLocalToCloud(id)
+                Log.d("ProfileViewModel", "Stats updated: Level $level, XP $xp")
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "Failed to update stats: ${e.message}")
+            }
+        }
+    }
+
     private fun startSessionObserver(userId: String, localToken: String) {
-        if (sessionListener != null && monitoredUserId == userId) return
+        if (sessionListener != null && monitoredUserId == userId && monitoredSessionToken == localToken) return
+
         removeSessionListener()
+
         monitoredUserId = userId
+        monitoredSessionToken = localToken
+
         val userRef = database.getReference("users").child(userId)
+
         sessionListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val serverToken = snapshot.child("sessionToken").getValue(String::class.java)
+
                 if (serverToken != null && serverToken != localToken) {
                     Log.w("Session", "Session Conflict detected! Server: $serverToken vs Local: $localToken")
                     _forceLogoutEvent.value = true
@@ -189,29 +416,36 @@ class ProfileViewModel(
                 Log.e("ProfileViewModel", "Database listen failed: ${error.message}")
             }
         }
+
         userRef.addValueEventListener(sessionListener!!)
     }
 
-    fun performLocalLogout() {
+    fun performLocalLogout(context: Context) {
         removeSessionListener()
 
+        MatchStateStorage.clear(context)
+
         viewModelScope.launch(Dispatchers.IO) {
-            userDao.deleteAllUsers()
-            // No need to manually set _userState to null, the Flow will do it automatically
-            // when the table becomes empty.
+            try {
+                userRepository.clearAllLocalData()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
             withContext(Dispatchers.Main) {
                 _forceLogoutEvent.value = false
             }
         }
     }
 
-    private fun removeSessionListener() {
+    fun removeSessionListener() {
         if (sessionListener != null && monitoredUserId != null) {
             database.getReference("users")
                 .child(monitoredUserId!!)
                 .removeEventListener(sessionListener!!)
             sessionListener = null
             monitoredUserId = null
+            monitoredSessionToken = null
         }
     }
 
@@ -234,8 +468,10 @@ class ProfileViewModel(
 
     fun updateName(newName: String) {
         val currentUser = userState.value ?: return
+
         if (newName.isNotBlank()) {
             val updatedUser = currentUser.copy(name = newName)
+
             viewModelScope.launch(Dispatchers.IO) {
                 // Update Local DB
                 userDao.updateUserName(currentUser.id, newName)
@@ -266,6 +502,7 @@ class ProfileViewModel(
                         profilePictureUrl = filePath,
                         lastUpdated = updateTime
                     )
+
                     userRepository.syncLocalToCloud(updatedUser.id)
                 }
             } catch (e: Exception) {
@@ -279,8 +516,8 @@ class ProfileViewModel(
             val result = userRepository.resetPassword(email)
 
             withContext(Dispatchers.Main) {
-                result.onSuccess { message ->
-                    onResult(true, message) // Pass the success message
+                result.onSuccess {
+                    onResult(true, it) // Pass the success message
                 }.onFailure { error ->
                     // Pass the error message (the one defined in the Repository)
                     onResult(false, error.message ?: "Unknown error occurred.")
@@ -289,14 +526,15 @@ class ProfileViewModel(
         }
     }
 
-    fun deleteAccount(user: User, onResult: (Boolean) -> Unit) {
+    fun deleteAccount(user: User, onResult: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
-            // Here we use 'userRepository' instead of 'repository'
             val result = userRepository.deleteAccount(user)
+
             if (result.isSuccess) {
-                onResult(true)
+                onResult(true, null)
             } else {
-                onResult(false)
+                val errorMessage = result.exceptionOrNull()?.message ?: "An unknown error occurred."
+                onResult(false, errorMessage)
             }
         }
     }
@@ -313,11 +551,11 @@ class ProfileViewModel(
         viewModelScope.launch {
             // This now calls the updated logic in Repository that adds the friend directly ("accepted")
             val result = userRepository.sendFriendRequest(currentUser, targetId)
-            result.onSuccess { message ->
-                onResult(true, message)
+            result.onSuccess {
+                onResult(true, it)
             }.onFailure { error ->
                 // This will capture the "Player ID does not exist" message
-                onResult(false, error.message ?: "An unknown error occurred.")
+                onResult(false, error.message ?: "Unknown error occurred.")
             }
         }
     }
@@ -336,13 +574,109 @@ class ProfileViewModel(
         }
     }
 
+    /**
+     * Specialized function for Training/Challenge rewards.
+     * Grants +5 XP and +5 Ranking Score.
+     */
+    fun addMiniGameWinReward(userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val user = userDao.getUserById(userId) ?: return@launch
+
+            // Increment XP and Ranking Total Score
+            val newXp = user.currentXp + 5
+            val newTotalScore = user.totalScore + 5L
+            val now = System.currentTimeMillis()
+
+            // Logic for Level Up (every 100 XP)
+            var currentLevel = user.level
+            var adjustedXp = newXp
+            if (adjustedXp >= 100) {
+                currentLevel += 1
+                adjustedXp -= 100
+            }
+
+            // Update user in local database to trigger UI update via Flow
+            val updatedUser = user.copy(
+                level = currentLevel,
+                currentXp = adjustedXp,
+                totalScore = newTotalScore,
+                lastWinTimestamp = now
+            )
+            userDao.updateUser(updatedUser)
+
+            // Sync with Firebase to update global leaderboard
+            userRepository.syncLocalToCloud(userId)
+
+            Log.d("ProfileViewModel", "Reward granted: +5 XP, +5 Score. New Score: $newTotalScore")
+        }
+    }
+
+    /**
+     * Calculates the cooldown for challenges.
+     * Uses userState.value directly as it is the StateFlow source.
+     */
+    fun getCooldownRemaining(): Long {
+        // Use userState.value directly
+        val user = userState.value ?: return 0L
+
+        // Handle potential null values and use Long for calculations to avoid ambiguity
+        val lastWin = user.lastWinTimestamp
+        val now = System.currentTimeMillis()
+        val cooldownPeriod = 3600000L // 1 hour
+
+        val remaining = (lastWin + cooldownPeriod) - now
+
+        return if (remaining > 0L) remaining else 0L
+    }
+
+    /**
+     * Updates the win timestamp to trigger cooldown.
+     */
+    fun updateChallengeCooldown(userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val now = System.currentTimeMillis()
+            userDao.updateLastWinTimestamp(userId, now)
+        }
+    }
+
+    fun updateAiAvatar(context: Context, bitmap: Bitmap) {
+        val currentUser = userState.value ?: return
+        viewModelScope.launch {
+            try {
+                // Save to internal storage
+                val filePath = withContext(Dispatchers.IO) {
+                    val fileName = "ai_avatar_${currentUser.id}.jpg"
+                    val file = File(context.filesDir, fileName)
+                    if (file.exists()) file.delete()
+
+                    FileOutputStream(file).use { out ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                    }
+
+                    file.absolutePath
+                }
+
+                // Update User Entity
+                val updatedUser = currentUser.copy(aiAvatarPath = filePath)
+
+                withContext(Dispatchers.IO) {
+                    userDao.updateUser(updatedUser)
+                    // Note: We usually don't sync this specific local setting to cloud
+                    // unless you want the AI image to persist across devices.
+                    // If yes: userRepository.syncLocalToCloud(updatedUser.id)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         removeSessionListener()
     }
 }
 
-// Factory (Kept compatible with the dependency injection)
 class ProfileViewModelFactory(
     private val userDao: UserDao,
     private val fleetDao: FleetDao,
@@ -351,7 +685,7 @@ class ProfileViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ProfileViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ProfileViewModel(userDao, userRepository) as T
+            return ProfileViewModel(userDao, fleetDao, userRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

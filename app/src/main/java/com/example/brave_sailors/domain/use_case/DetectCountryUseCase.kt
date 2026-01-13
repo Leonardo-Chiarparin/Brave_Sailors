@@ -31,7 +31,12 @@ fun detectCountryFromLocation(context: Context, onCountryFound: (String) -> Unit
                         decodeAndNotify(context, newLocation, onCountryFound)
                     }
                 }
+                .addOnFailureListener {
+                    it.printStackTrace()
+                }
         }
+    }.addOnFailureListener {
+        it.printStackTrace()
     }
 }
 
@@ -40,12 +45,22 @@ fun decodeAndNotify(context: Context, location: Location, onCountryFound: (Strin
         val geocoder = Geocoder(context, Locale.getDefault())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             geocoder.getFromLocation(location.latitude, location.longitude, 1) { addresses ->
-                if (addresses.isNotEmpty()) onCountryFound(addresses[0].countryCode)
+                if (addresses.isNotEmpty()) {
+                    val countryCode = addresses[0].countryCode
+
+                    if (countryCode != null)
+                        onCountryFound(countryCode.uppercase())
+                }
             }
         } else {
             @Suppress("DEPRECATION")
             val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-            if (!addresses.isNullOrEmpty()) onCountryFound(addresses[0].countryCode)
+            if (!addresses.isNullOrEmpty()) {
+                val countryCode = addresses[0].countryCode
+
+                if (countryCode != null)
+                    onCountryFound(countryCode.uppercase())
+            }
         }
     } catch (e: Exception) {
         e.printStackTrace()

@@ -41,14 +41,10 @@ fun LockScreenOrientation(isPortrait: Boolean) {
 
                 val target = when {
                     // Portrait
-                    currentState.value && orientation in 150..210 -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+                    currentState.value && orientation in 165..195 -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
 
                     // Reverse Portrait
-                    currentState.value && orientation !in 31..329 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-
-                    // [ TO - DO ]: Implement the remaining part by adapting the screen to the other orientation
-                    // Landscape: !currentState.value && orientation in 240..300
-                    // Reverse Landscape: !currentState.value && orientation in 60..120
+                    currentState.value && orientation !in 16..344 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
                     else -> null
                 }

@@ -14,6 +14,8 @@ import com.example.brave_sailors.data.local.database.UserDao
 import com.example.brave_sailors.data.local.database.entity.User
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
@@ -33,6 +35,7 @@ class GoogleSigningUseCase(
 ) {
     // Instance for Realtime Database
     private val database = FirebaseDatabase.getInstance()
+    private val auth = FirebaseAuth.getInstance()
 
     /**
      * @param context Android Context
@@ -118,14 +121,14 @@ class GoogleSigningUseCase(
                 return@withContext SigningResult.Error("Credential type not recognized.")
             }
 
+            val authCredential = GoogleAuthProvider.getCredential(gToken, null)
+            val authResult = auth.signInWithCredential(authCredential).await()
+            val firebaseUser = authResult.user
+
+            val realUserId = firebaseUser?.uid ?: getIDFromToken(gToken).ifEmpty { gEmail.replace(".", "_") }
+
             // 4. REALTIME DATABASE SESSION
             val currentSessionToken = UUID.randomUUID().toString()
-
-            // Prepare Google ID to be used as a Key (emails cannot be keys directly)
-            var googleId = getIDFromToken(gToken)
-            if (googleId.isEmpty()) {
-                googleId = gEmail.replace(".", "_")
-            }
 
             try {
                 val userData = hashMapOf(
@@ -137,7 +140,7 @@ class GoogleSigningUseCase(
 
                 // Write/Merge to Realtime Database
                 database.getReference("users")
-                    .child(googleId)
+                    .child(realUserId)
                     .updateChildren(userData as Map<String, Any>)
                     .await()
 
@@ -147,7 +150,7 @@ class GoogleSigningUseCase(
 
             // 5. FINALIZE LOCAL LOGIN
             return@withContext handleSuccess(
-                userId = googleId,
+                userId = realUserId,
                 email = gEmail,
                 googleDisplayName = gName,
                 googlePhotoUrl = gPhoto,
@@ -177,15 +180,13 @@ class GoogleSigningUseCase(
         val existingUser = userDao.getUserById(userId)
         val safeGooglePhotoUrl = if (googlePhotoUrl.isNullOrEmpty()) "ic_terms" else googlePhotoUrl
 
-        val userToReturn = if (existingUser != null) {
-            // Update existing user with new Google info and session token
-            existingUser.copy(
-                googleName = googleDisplayName,
-                googlePhotoUrl = safeGooglePhotoUrl,
-                sessionToken = sessionToken
-            )
-        } else {
-            // Create new user structure
+        val userToReturn = existingUser?.// Update existing user with new Google info and session token
+        copy(
+            googleName = googleDisplayName,
+            googlePhotoUrl = safeGooglePhotoUrl,
+            sessionToken = sessionToken
+        )
+            ?: // Create new user structure
             User(
                 id = userId,
                 email = email,
@@ -196,7 +197,6 @@ class GoogleSigningUseCase(
                 sessionToken = sessionToken,
                 countryCode = null
             )
-        }
 
         val isNew = (existingUser == null)
         prepareImage(context, userToReturn.googlePhotoUrl)

@@ -69,16 +69,33 @@ private fun Modal(
     val closeButtonShape = CutCornerShape(bottomStart = scale.dp(34f))
 
     // -- DYNAMIC DATA CALCULATION --
-    // Exp. Logic: Example ( target = level * 1000 )
-    // [ NOTE ]: Modify the formula if necessary
-    val currentLevel = user?.level ?: 1
     val currentXp = user?.currentXp ?: 0
-    val targetXp = currentLevel * 1000
+    val xpStep = 1000 // XP required to complete a single cycle/level
 
-    // Compute bar's percentage ( 0f -> 1f )
-    val xpProgress = if (targetXp > 0) (currentXp.toFloat() / targetXp.toFloat()).coerceIn(0f, 1f) else 0f
+    // Calculate the target XP for the *next* milestone dynamically based on current XP.
+    // Example: If current XP is 1500, we want the bar to show progress towards 2000.
+    // Logic: ((1500 / 1000) + 1) * 1000 = 2000.
+    val targetXp = ((currentXp / xpStep) + 1) * xpStep
 
-    // List of stats
+    // Calculate the specific progress within the current 1000 XP chunk using modulo.
+    // Example: 1500 XP -> 500 XP accumulated in current level.
+    val xpInCurrentLevel = currentXp % xpStep
+
+    // Compute bar's percentage (0.0 -> 1.0) based on the chunk, not total XP.
+    val xpProgress = (xpInCurrentLevel.toFloat() / xpStep.toFloat()).coerceIn(0f, 1f)
+
+    // -- RANK CALCULATION --
+    // Determines the title based on total current XP (1 win = ~10 XP)
+    val rankTitle = when {
+        currentXp >= 1000 -> "Grand Admiral" // 100+ wins
+        currentXp >= 600 -> "Admiral"        // 60+ wins
+        currentXp >= 300 -> "Vice-Admiral"   // 30+ wins
+        currentXp >= 150 -> "Captain"        // 15+ wins
+        currentXp >= 50 -> "Vice-Captain"    // 5+ wins
+        else -> "Sailor"                     // Beginner
+    }
+
+    // List of general stats pairs for display
     val stats = listOf(
         "Total games played" to (user?.totalGamesPlayed ?: 0).toString(),
         "Victories" to (user?.wins ?: 0).toString(),
@@ -86,7 +103,7 @@ private fun Modal(
         "Win rate (%)" to String.format(Locale.US, "%.1f", user?.winRate ?: 0f)
     )
 
-    // List of battle infos
+    // List of detailed battle info pairs for display
     val infos = listOf(
         "Shots" to (user?.totalShotsFired ?: 0).toString(),
         "Boats sunken" to (user?.shipsDestroyed ?: 0).toString(),
@@ -175,7 +192,7 @@ private fun Modal(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "Sailor",
+                                text = rankTitle,
                                 color = White,
                                 fontSize = scale.sp(28f),
                                 fontFamily = FontFamily.SansSerif,
@@ -193,7 +210,7 @@ private fun Modal(
 
                             Spacer(modifier = Modifier.height(scale.dp(36f)))
 
-                            // XP Bar
+                            // XP Progress Bar
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()

@@ -9,6 +9,8 @@ import androidx.room.Transaction
 import androidx.room.Update
 import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.data.local.database.entity.FriendEntity
+import com.example.brave_sailors.data.local.database.entity.MatchResult
+import com.example.brave_sailors.data.local.database.entity.MoveLog
 import kotlinx.coroutines.flow.Flow
 import com.example.brave_sailors.data.local.database.entity.SavedShip
 
@@ -51,7 +53,6 @@ interface UserDao {
     // --- SECURITY / SESSION MANAGEMENT ---
 
     // Clears all local users.
-    // REQUIRED: use on logout or when a session conflict happens to wipe local identity data.
     @Query("DELETE FROM users")
     suspend fun deleteAllUsers()
 
@@ -81,6 +82,11 @@ interface UserDao {
     @Query("UPDATE users SET level = :level, currentXp = :xp, lastWinTimestamp = :timestamp WHERE id = :id")
     suspend fun updateGameStats(id: String, level: Int, xp: Int, timestamp: Long)
 
+    // Updates ONLY the last win timestamp.
+    // [ NOTE ]: Used to trigger the cooldown timer for training/mini-games.
+    @Query("UPDATE users SET lastWinTimestamp = :timestamp WHERE id = :id")
+    suspend fun updateLastWinTimestamp(id: String, timestamp: Long)
+
     // Clears the session token (sets it to NULL) for the given user.
     // Typically called on logout or when the token is invalid/expired.
     @Query("UPDATE users SET sessionToken = NULL WHERE id = :userId")
@@ -95,8 +101,10 @@ interface FleetDao {
     @Query("SELECT * FROM user_fleet WHERE userId = :userId")
     suspend fun getUserFleet(userId: String): List<SavedShip>
 
+    @Query("SELECT * FROM user_fleet WHERE userId = :userId")
+    fun getUserFleetFlow(userId: String): Flow<List<SavedShip>>
+
     // Saves a list of ships to the local DB.
-    // REPLACE updates existing rows (same primary key) and inserts missing ones.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveFleet(ships: List<SavedShip>)
 
@@ -104,6 +112,9 @@ interface FleetDao {
     // Used to reset the fleet locally (e.g., on logout or re-sync).
     @Query("DELETE FROM user_fleet WHERE userId = :userId")
     suspend fun clearUserFleet(userId: String)
+
+    @Query("DELETE FROM user_fleet")
+    suspend fun deleteAllFleets()
 
     // Atomically replaces the entire fleet for a user:
     // 1) clear existing fleet rows
@@ -124,4 +135,46 @@ interface FriendDao {
 
     @Query("SELECT * FROM friends")
     fun getAllFriendsFlow(): Flow<List<FriendEntity>>
+
+    @Query("DELETE FROM friends WHERE id NOT IN (:activeIds)")
+    suspend fun deleteFriendsNotIn(activeIds: List<String>)
+
+    @Query("DELETE FROM friends")
+    suspend fun deleteAllFriends()
+}
+
+@Dao
+interface MatchDao {
+
+    @Insert
+    suspend fun insertMatch(match: MatchResult): Long // Returns the generated ID
+
+    @Insert
+    suspend fun insertMoves(moves: List<MoveLog>)
+
+    // Save everything together in a single transaction
+    @Transaction
+    suspend fun saveFullMatch(match: MatchResult, moves: List<MoveLog>) {
+        val matchId = insertMatch(match)
+        // Update the match ID in the moves (since matchId is auto-generated)
+        val movesWithId = moves.map { it.copy(matchId = matchId) }
+        insertMoves(movesWithId)
+    }
+
+    // Get the user's match history
+    @Query("SELECT * FROM match_history WHERE player1Id = :userId ORDER BY timestamp DESC")
+    fun getMatchHistory(userId: String): Flow<List<MatchResult>>
+
+    // Get details (moves) of a specific match
+    @Query("SELECT * FROM move_logs WHERE matchId = :matchId ORDER BY turnNumber ASC")
+    suspend fun getMovesForMatch(matchId: Long): List<MoveLog>
+
+    @Query("DELETE FROM match_history WHERE player1Id = :userId")
+    suspend fun deleteMatchesForUser(userId: String)
+
+    @Query("DELETE FROM match_history")
+    suspend fun deleteAllMatches()
+
+    @Query("DELETE FROM move_logs")
+    suspend fun deleteAllMoves()
 }

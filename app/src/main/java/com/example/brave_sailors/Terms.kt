@@ -134,7 +134,6 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
     var playerPhoto by remember { mutableStateOf<String?>(null) }
 
     // We hold the user object returned by login until "START" is pressed (for new users)
-    var pendingUser by remember { mutableStateOf<User?>(null) }
     var isNewUser by remember { mutableStateOf(false) }
 
     // Detected Country State
@@ -159,32 +158,27 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
             when (val result = googleSigning(context)) {
                 is SigningResult.Success -> {
                     val user = result.user
+
                     val userWithCountry = if (detectedCountryCode != null) {
                         user.copy(countryCode = detectedCountryCode!!)
                     } else user
-
-                    pendingUser = userWithCountry
-                    isNewUser = result.isNewUser
 
                     playerName = user.googleName
                     playerEmail = user.email
                     playerPhoto = user.googlePhotoUrl
 
-                    if (!isNewUser) {
-                        viewModel.initializeSession(user, isNewUser = false) {
+                    viewModel.initializeSession(userWithCountry) { finalUser, isActuallyNewUser ->
+                        isSignedIn = true
+                        isSigningIn = false
+                        isNewUser = isActuallyNewUser
 
-                            if (detectedCountryCode != null)
+                        if (detectedCountryCode != null)
+                            if (isNewUser || finalUser.countryCode.isNullOrEmpty())
                                 viewModel.updateCountry(detectedCountryCode!!)
 
-                            viewModel.showHomeWelcome = true
-                            onStartApp()
-                        }
-                    }
-                    else
+                        viewModel.showHomeWelcome = false
                         showPopup = true
-
-                    isSignedIn = true
-                    isSigningIn = false
+                    }
                 }
 
                 is SigningResult.Cancelled -> {
@@ -202,7 +196,7 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                     delay(500)
 
                     isSigningIn = false
-                    restartApp(context)
+                    // restartApp(context)
                 }
             }
         }
@@ -244,13 +238,9 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
         }
     }
 
-    LaunchedEffect(detectedCountryCode) {
+    LaunchedEffect(detectedCountryCode, isSignedIn, isNewUser) {
         if (detectedCountryCode != null) {
-            if (pendingUser != null) {
-                pendingUser = pendingUser!!.copy(countryCode = detectedCountryCode!!)
-            }
-
-            if (isSignedIn && !isNewUser) {
+            if (isSignedIn && isNewUser) {
                 viewModel.updateCountry(detectedCountryCode!!)
             }
         }
@@ -298,7 +288,6 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
                                 .data(playerPhoto)
-                                .crossfade(true)
                                 .build(),
                             error = painterResource(id = R.drawable.ic_terms),
                             contentDescription = "avatar",
@@ -473,16 +462,8 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                             28f,
                             text = "START",
                             onClick = {
-                                pendingUser?.let { user ->
-                                    val finalUser = if (detectedCountryCode != null) {
-                                        user.copy(countryCode = detectedCountryCode!!)
-                                    } else user
-
-                                    viewModel.initializeSession(finalUser, isNewUser = false) { _ ->
-                                        viewModel.showHomeWelcome = false
-                                        onStartApp()
-                                    }
-                                }
+                                 viewModel.showHomeWelcome = false
+                                 onStartApp()
                             },
                             enabled = privacyAccepted
                         )

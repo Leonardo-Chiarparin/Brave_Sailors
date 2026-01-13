@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -22,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -34,6 +34,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.brave_sailors.data.local.MatchStateStorage
 import com.example.brave_sailors.data.local.database.AppDatabase
 import com.example.brave_sailors.data.remote.api.RetrofitClient
 import com.example.brave_sailors.data.repository.UserRepository
@@ -69,14 +70,17 @@ class MainActivity : ComponentActivity() {
         val userDao = db.userDao()
         val fleetDao = db.fleetDao()
         val friendDao = db.friendDao()
+        val matchDao = db.matchDao()
 
         val apiService = RetrofitClient.api
-        val userRepository = UserRepository(apiService, userDao, fleetDao, friendDao)
+        val userRepository = UserRepository(apiService, userDao, fleetDao, friendDao, matchDao)
 
         setContent {
             Brave_SailorsTheme {
                 // [ NOTE ]: Force portrait orientation for the entire application
                 LockScreenOrientation(isPortrait = true)
+
+                val context = LocalContext.current
 
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -90,7 +94,7 @@ class MainActivity : ComponentActivity() {
                 // -- GLOBAL TIMEOUT LOGIC ( 1 minute ) --
                 // e.g., if the program stays in the background ( suspended ) for more than the previous duration, it will be restarted from the initial page ( except for specific routes )
                 val lifecycleOwner = LocalLifecycleOwner.current
-                var lastBackgroundTime by remember { mutableStateOf(0L) }
+                var lastBackgroundTime by remember { mutableLongStateOf(0L) }
                 val timeoutDuration = 60 * 1000L // 1 minute
 
                 DisposableEffect(lifecycleOwner) {
@@ -110,7 +114,7 @@ class MainActivity : ComponentActivity() {
                                     // RESTART LOGIC:
                                     // Trigger if NOT on "terms" or "loading".
                                     // We allow trigger even if already on "intro" to restart the loading animation/data fetch.
-                                    val shouldRestart = currentRoute != "terms" && currentRoute != "loading"
+                                    val shouldRestart = currentRoute != null && currentRoute != "terms" && currentRoute != "loading"
 
                                     if (shouldRestart) {
                                         navController.navigate("loading") {
@@ -135,8 +139,6 @@ class MainActivity : ComponentActivity() {
                         lifecycleOwner.lifecycle.removeObserver(observer)
                     }
                 }
-
-                val context = LocalContext.current
 
                 // State used to determine the startDestination
                 var startDestination by remember { mutableStateOf<String?>(null) }
@@ -163,6 +165,12 @@ class MainActivity : ComponentActivity() {
                             ) {  }
 
                             LaunchedEffect(Unit) {
+                                val pendingMatch = MatchStateStorage.getState(context)
+
+                                if (pendingMatch != null)
+                                    profileViewModel.handleTimeoutForfeit(context)
+
+
                                 // One-time DB control to decide the starting path
                                 val userExists = withContext(Dispatchers.IO) {
                                     // [ NOTE ]: getCurrentUser must return User? ( not Flow )

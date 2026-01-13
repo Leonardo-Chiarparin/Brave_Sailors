@@ -28,12 +28,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddCircleOutline
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,14 +49,28 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.brave_sailors.data.local.database.AppDatabase
 import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.data.remote.api.Flag
+import com.example.brave_sailors.data.remote.api.RetrofitClient
+import com.example.brave_sailors.data.repository.UserRepository
+import com.example.brave_sailors.model.CellStatus
+import com.example.brave_sailors.model.GridCell
+import com.example.brave_sailors.model.MatchType
+import com.example.brave_sailors.model.MatchVsComputerViewModel
+import com.example.brave_sailors.model.MatchVsComputerViewModelFactory
+import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.components.DialogMatchResult
 import com.example.brave_sailors.ui.components.DialogRetire
 import com.example.brave_sailors.ui.components.FleetStatus
@@ -63,8 +81,12 @@ import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
+val CrossRed = Color(0xFFE00814)
+
 @Composable
 fun MatchVsComputerScreen(
+    db: AppDatabase,
+    profileViewModel: ProfileViewModel,
     difficulty: String, // such difficulty manages the AI's behavior ( using random search, DQN, etc. )
     firingRule: String, // this parameter defines how many times a player has to shoot ( once, up to the opponent's remaining ships, until he/she hits something )
     user: User?,
@@ -72,11 +94,68 @@ fun MatchVsComputerScreen(
     onRetire: () -> Unit,
     onComplete: (Boolean) -> Unit
 ) {
-    Modal(difficulty, firingRule, user, flag, onRetire, onComplete)
+    val context = LocalContext.current
+
+    // ViewModel initialization
+    val repository = remember {
+        UserRepository(
+            RetrofitClient.api,
+            db.userDao(),
+            db.fleetDao(),
+            db.friendDao(),
+            db.matchDao()
+        )
+    }
+
+    val viewModel: MatchVsComputerViewModel = viewModel(
+        factory = MatchVsComputerViewModelFactory(context, db.userDao(), db.fleetDao(), repository)
+    )
+
+    LaunchedEffect(Unit) {
+        viewModel.initializeMatch(difficulty, firingRule)
+
+        profileViewModel.setMatchActive(
+            context,
+            matchId = "LOCAL_AI_${System.currentTimeMillis()}",
+            opponentName = "$difficulty AI",
+            type = MatchType.COMPUTER
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            profileViewModel.clearActiveMatch(context)
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    viewModel.onAppBackground()
+                }
+
+                Lifecycle.Event.ON_RESUME -> {
+                    viewModel.onAppForeground()
+                }
+
+                else -> {  }
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    Modal(viewModel, difficulty, firingRule, user, flag, onRetire, onComplete)
 }
 
 @Composable
 private fun Modal(
+    viewModel: MatchVsComputerViewModel,
     difficulty: String,
     firingRule: String,
     user: User?,
@@ -87,14 +166,18 @@ private fun Modal(
     val scale = RememberScaleConversion()
     val maxWidth = scale.dp(720f)
 
-    // [ TO - DO ]: Implement a real turn exchange mechanism, the following is just for example
-    var isPlayerTurn by remember { mutableStateOf(false) }
-    val turnNumber by remember { mutableIntStateOf(1) }
+    val uiState by viewModel.uiState.collectAsState()
+
+    val isPlayerTurn = uiState.isPlayerTurn
+    val turnNumber = uiState.turnNumber
 
     var showDialogRetire by remember { mutableStateOf(false) }
     var showDialogMatchResult by remember { mutableStateOf(false) }
 
-    var isPlayerWinner by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.isGameOver) {
+        if (uiState.isGameOver)
+            showDialogMatchResult = true
+    }
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -144,7 +227,7 @@ private fun Modal(
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
-                            enabled = true, // it's always possible to give up ( for this case only, as well as the one related to the match via Lobby )
+                            enabled = !uiState.isGameOver, // it's always possible to give up ( for this case only, as well as the one related to the match via Lobby )
                             onClick = { showDialogRetire = true }
                         ),
                     contentAlignment = Alignment.Center
@@ -174,25 +257,28 @@ private fun Modal(
                 },
                 label = "HeaderAnimation"
             ) { isPlayer ->
-                // [ TO - DO ]: Adjust the player's statistics
                 if (isPlayer)
                     Match(
                         name = user?.name ?: "Sailor",
                         avatarUrl = user?.profilePictureUrl,
                         flagUrl = flag?.flagUrl,
-                        wins = (0).toString(),
-                        losses = (0).toString(),
+                        wins = user?.wins.toString(),
+                        losses = user?.losses.toString(),
                         isAi = false
                     )
-                else
+                else {
+                    val aiPath = user?.aiAvatarPath
+                    val avatarToDisplay = if (aiPath != null && aiPath != "ic_ai_avatar_placeholder") aiPath else null
+
                     Match(
                         name = "$difficulty AI",
-                        avatarUrl = null, // Default avatar (ic_ai_avatar_placeholder)
+                        avatarUrl = avatarToDisplay,
                         flagUrl = null,
                         wins = "-",
                         losses = "-",
                         isAi = true
                     )
+                }
             }
 
             Spacer(modifier = Modifier.height(scale.dp(86f)))
@@ -210,15 +296,29 @@ private fun Modal(
                     .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // [ TO - DO ]: It must display the number of the opposing ships according to the turn
+                val targetFleetMap = if (isPlayerTurn) uiState.aiShipsComposition else uiState.playerShipsComposition
+
                 FleetStatus(
                     turn = turnNumber,
-                    isPlayerTurn = isPlayerTurn
+                    isPlayerTurn = isPlayerTurn,
+                    shipsRemaining = targetFleetMap
                 )
 
                 Spacer(modifier = Modifier.height(scale.dp(28f)))
 
-                GameGrid()
+                // Prepare the data for GameGrid()
+                val gridToShow = if (isPlayerTurn) uiState.aiGrid else uiState.playerGrid
+                val showShips = (!isPlayerTurn) || uiState.isGameOver
+
+                 GameGrid(
+                     grid = gridToShow,
+                     isPlayerTurn = isPlayerTurn,
+                     showShips = showShips,
+                     onCellClick = { row, column ->
+                         if (isPlayerTurn && !uiState.isGameOver)
+                             viewModel.onPlayerFire(row, column)
+                     }
+                 )
             }
         }
 
@@ -228,20 +328,21 @@ private fun Modal(
                 onDismiss = { showDialogRetire = false },
                 onConfirm = {
                     showDialogRetire = false
+                    viewModel.onRetire()
                     onRetire()
                 }
             )
         }
 
         if (showDialogMatchResult) {
-            val winnerName = if (isPlayerWinner) (user?.name ?: "Sailor") else "$difficulty AI"
+            val winnerName = uiState.winnerName
 
             DialogMatchResult(
                 turnNumber = turnNumber,
                 winnerName = winnerName,
                 onConfirm = {
                     showDialogMatchResult = false
-                    onComplete(isPlayerWinner)
+                    onComplete(uiState.isPlayerWinner)
                 }
             )
         }
@@ -249,7 +350,12 @@ private fun Modal(
 }
 
 @Composable
-private fun GameGrid() {
+private fun GameGrid(
+    grid: List<List<GridCell>>,
+    isPlayerTurn: Boolean,
+    showShips: Boolean,
+    onCellClick: (Int, Int) -> Unit
+) {
     val scale = RememberScaleConversion()
 
     val cellSize = scale.dp(64f)
@@ -358,12 +464,52 @@ private fun GameGrid() {
                         )
                     )
             ) {
+                Column {
+                    for (row in 0 until GRID_SIZE) {
+                        Row {
+                            for (col in 0 until GRID_SIZE) {
+                                val cell = if (grid.isNotEmpty() && row < grid.size && col < grid[0].size) grid[row][col] else GridCell(row, col)
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(cellSize)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            enabled = isPlayerTurn && cell.status != CellStatus.HIT && cell.status != CellStatus.MISS,
+                                            onClick = { onCellClick(row, col) }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    val isShipPresent = cell.status == CellStatus.SHIP || (cell.status == CellStatus.HIT && cell.shipId > 0)
+
+                                    if (showShips && isShipPresent) {
+                                        val colorKey = if (cell.originalSize > 0) cell.originalSize else 1
+
+                                        val color = SHIP_COLORS[colorKey] ?: White
+
+                                        Box(
+                                            modifier = Modifier.fillMaxSize().padding(scale.dp(3f)).background(color)
+                                        )
+                                    }
+
+                                    if (cell.status == CellStatus.HIT) {
+                                        Icon(imageVector = Icons.Default.AddCircleOutline, contentDescription = "Hit", tint = CrossRed, modifier = Modifier.size(scale.dp(42f)))
+                                    }
+
+                                    if (cell.status == CellStatus.MISS) {
+                                        Icon(imageVector = Icons.Default.Close, contentDescription = "Miss", tint = White, modifier = Modifier.size(scale.dp(42f)))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .size(cellSize * GRID_SIZE)
                 ) {
-                    // -- PLACEMENT ( if the AI's turn is ongoing ) --
-
                     GridLinesOverlay(GRID_SIZE, cellSize)
                 }
             }

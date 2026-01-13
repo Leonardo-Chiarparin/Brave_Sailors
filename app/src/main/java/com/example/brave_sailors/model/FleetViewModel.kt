@@ -30,7 +30,14 @@ class FleetViewModel(
     private val GRID_SIZE = 8
     val initialShipsToPlace = listOf(4, 3, 3, 2, 2, 2, 1, 1)
 
-    private val _state = MutableStateFlow(FleetUiState())
+    private val _state = MutableStateFlow(
+        FleetUiState(
+            isLoading = true,
+            shipsToPlace = emptyList(),
+            placedShips = emptyList()
+        )
+    )
+
     val state = _state.asStateFlow()
 
     private val _events = MutableSharedFlow<FleetUiEvent>()
@@ -48,29 +55,36 @@ class FleetViewModel(
                 return@launch
             }
 
-            val saved = fleetDao.getUserFleet(user.id)
-            if (saved.isEmpty()) {
-                _state.update { it.copy(isLoading = false, shipsToPlace = initialShipsToPlace) }
-                return@launch
-            }
+            fleetDao.getUserFleetFlow(user.id).collect { saved ->
+                if (saved.isNotEmpty()) {
+                    val placedShips = saved.map { s ->
+                        FleetPlacedShip(s.shipId, s.size, s.row, s.col, s.isHorizontal)
+                    }
 
-            val placedShips = saved.map { s ->
-                FleetPlacedShip(s.shipId, s.size, s.row, s.col, s.isHorizontal)
-            }
+                    val grid = rebuildGrid(placedShips)
 
-            val grid = rebuildGrid(placedShips)
-            val shipsLeft = initialShipsToPlace.toMutableList()
-            // Remove placed ships from the available list based on size count
-            placedShips.forEach { shipsLeft.remove(it.size) }
-
-            _state.update {
-                it.copy(
-                    grid = grid,
-                    placedShips = placedShips,
-                    shipsToPlace = shipsLeft,
-                    isLoading = false,
-                    isSaved = true
-                )
+                    _state.update {
+                        it.copy(
+                            grid = grid,
+                            placedShips = placedShips,
+                            shipsToPlace = emptyList(),
+                            isLoading = false,
+                            isSaved = true
+                        )
+                    }
+                } else {
+                    if (_state.value.placedShips.isEmpty()) {
+                        _state.update {
+                            it.copy(
+                                grid = emptyGrid(),
+                                placedShips = emptyList(),
+                                shipsToPlace = initialShipsToPlace,
+                                isLoading = false,
+                                isSaved = false
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -181,10 +195,12 @@ class FleetViewModel(
 
     fun onReset() {
         _state.update {
-            FleetUiState(
+            it.copy(
+                placedShips = emptyList(),
                 shipsToPlace = initialShipsToPlace,
                 isLoading = false,
-                grid = emptyGrid() // Ensure grid is visually cleared
+                grid = emptyGrid(),
+                isSaved = false
             )
         }
     }
@@ -209,8 +225,6 @@ class FleetViewModel(
         // Don't auto-place if we are already saved (prevent accidental overwrite)
         // OR remove this check if you want the "Auto" button to work always as a reset+randomize
         // if (_state.value.isSaved) return
-
-        onReset()
 
         val shipsToDistribute = initialShipsToPlace
         val newPlacedShips = mutableListOf<FleetPlacedShip>()
@@ -245,12 +259,12 @@ class FleetViewModel(
             }
         }
 
-        // <--- 2. FIX: Rebuild Grid for UI updates --->
+        // -- 2. Rebuild Grid for UI updates --
         val newGrid = rebuildGrid(newPlacedShips)
 
         _state.update {
             it.copy(
-                grid = newGrid, // Update the visual grid!
+                grid = newGrid,
                 placedShips = newPlacedShips,
                 shipsToPlace = emptyList(),
                 placementPreview = null,

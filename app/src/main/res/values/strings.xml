@@ -1,8 +1,12 @@
 <resources>
     <string name="app_name" translatable="false">Brave Sailors</string>
-    <string name="game_services_project_id" translatable="false">101333280904</string>
     <string name="privacy_policy" translatable="false">https://privacy-service-101333280904.europe-west1.run.app/privacy-policy</string>
-    <string name="web_client" translatable="false">101333280904-c5h9ok4seffc3phjuo3fo4tmcpel1rp0.apps.googleusercontent.com</string>
+
+    <!-- <string name="game_services_project_id" translatable="false">101333280904</string> -->
+    <!-- <string name="web_client" translatable="false">101333280904-c5h9ok4seffc3phjuo3fo4tmcpel1rp0.apps.googleusercontent.com</string> -->
+
+    <string name="game_services_project_id" translatable="false">458450729028</string>
+    <string name="web_client" translatable="false">458450729028-qb2qr2rkd1b11p6b9l4s2l29rdp5kt0u.apps.googleusercontent.com</string>
 
     <string name="crop_image_menu_crop">Crop</string>
     <string name="crop_image_menu_flip">Flip</string>

@@ -1,5 +1,6 @@
 package com.example.brave_sailors.model
 
+import android.content.Context
 import android.util.Patterns
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -7,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.brave_sailors.data.local.MatchStateStorage
 import com.example.brave_sailors.data.repository.UserRepository
 import kotlinx.coroutines.launch
 
@@ -37,17 +39,26 @@ class RegisterViewModel(
 
     fun register(email: String, pass: String, confirmPass: String) {
         // Normalize input: remove whitespace, while the domain is later converted to lowercase for consistency
-        val cleanEmail = email.trim().lowercase()
+        val rawEmail = email.trim()
 
         uiState = RegisterUiState.Loading
 
+        if (!rawEmail.contains("@")) {
+            uiState = RegisterUiState.Error("Invalid email format.")
+            return
+        }
+
+        val localPart = rawEmail.substringBeforeLast("@")
+        val domainPart = rawEmail.substringAfterLast("@").lowercase()
+
         // --- DOMAIN VALIDATION ---
         // Extract the domain substring and check against the allowed list
-        val domain = cleanEmail.substringAfter("@", "")
-        if (domain !in allowedDomains) {
+        if (domainPart !in allowedDomains) {
             uiState = RegisterUiState.Error("Please use a correct domain (e.g., Gmail, Outlook, Yahoo, Libero, etc.).")
             return
         }
+
+        val cleanEmail = "$localPart@$domainPart"
 
         // --- FORMAT VALIDATION ---
         // Use the cleaned email to ensure no invisible spaces cause regex failure
@@ -66,18 +77,10 @@ class RegisterViewModel(
             return
         }
 
-        // --- NAME GENERATION ---
-        // Automatically create a display name by taking the email prefix (before '@')
-        // and capitalizing the first letter (e.g., mario@... -> Mario)
-        val generatedName = cleanEmail.substringBefore("@")
-            .replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-
         // --- EXECUTION ---
         viewModelScope.launch {
             // Proceed with registration using the repository.
-            // Note: We send 'generatedName' so the backend User entity is created with a name,
-            // avoiding the default "Sailor".
-            val result = repository.registerUser(cleanEmail, pass, generatedName)
+            val result = repository.registerUser(cleanEmail, pass)
 
             result.onSuccess { msg ->
                 uiState = RegisterUiState.Success(msg)
@@ -87,8 +90,17 @@ class RegisterViewModel(
         }
     }
 
-    fun login(email: String, pass: String) {
-        val cleanEmail = email.trim().lowercase()
+    fun login(context: Context, email: String, pass: String) {
+        val rawEmail = email.trim()
+
+        val cleanEmail = if (rawEmail.contains("@")) {
+            val localPart = rawEmail.substringBeforeLast("@")
+            val domainPart = rawEmail.substringAfterLast("@").lowercase()
+            "$localPart@$domainPart"
+        } else {
+            rawEmail
+        }
+
         uiState = RegisterUiState.Loading
 
         // --- INPUT VALIDATION ---
@@ -108,6 +120,7 @@ class RegisterViewModel(
             val result = repository.loginUser(cleanEmail, pass)
 
             result.onSuccess { msg ->
+                MatchStateStorage.clear(context)
                 uiState = RegisterUiState.Success(msg)
             }.onFailure { err ->
                 uiState = RegisterUiState.Error(err.message ?: "Login failed")

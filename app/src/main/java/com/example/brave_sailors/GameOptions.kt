@@ -1,5 +1,10 @@
 package com.example.brave_sailors
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,9 +28,11 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +42,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -42,6 +50,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.core.content.ContextCompat
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
+import com.canhub.cropper.CropImageContract
+import com.canhub.cropper.CropImageContractOptions
+import com.canhub.cropper.CropImageOptions
+import com.canhub.cropper.CropImageView
+import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.components.DividerOrange
 import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.components.SixthButton
@@ -49,17 +65,29 @@ import com.example.brave_sailors.ui.theme.DarkBlue
 import com.example.brave_sailors.ui.theme.LightBlue
 import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.White
+import com.example.brave_sailors.ui.utils.GameSettingsManager
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
+import kotlinx.coroutines.launch
+import java.io.File
 
 @Composable
 fun GameOptionsScreen(
-    onBack: () -> Unit
+    viewModel: ProfileViewModel,
+    onBack: () -> Unit,
+    onGetAiPhoto: (Uri) -> Unit
 ) {
-    Modal(onBack)
+    Modal(viewModel, onBack, onGetAiPhoto)
 }
 
 @Composable
-private fun Modal(onBack: () -> Unit) {
+private fun Modal(
+    viewModel: ProfileViewModel,
+    onBack: () -> Unit,
+    onGetAiPhoto: (Uri) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     val scale = RememberScaleConversion()
     val interactionSource = remember { MutableInteractionSource() }
     val maxWidth = scale.dp(720f)
@@ -67,10 +95,55 @@ private fun Modal(onBack: () -> Unit) {
 
     val closeButtonShape = CutCornerShape(bottomStart = scale.dp(34f))
 
-    // Fake states regarding the user's options ( they have to be managed through the ViewModel )
-    var isAlarmOn by remember { mutableStateOf(true) }
-    var isMusicOn by remember { mutableStateOf(false) } // [ NOTE ]: it can be done using the device's torch, otherwise remove this element
-    var isVibrationOn by remember { mutableStateOf(true) }
+    val settingManager = remember { GameSettingsManager(context) }
+
+    var isAlarmOn by remember { mutableStateOf(settingManager.isAlarmOn) }
+    var isMusicOn by remember { mutableStateOf(settingManager.isMusicOn) }
+    var isVibrationOn by remember { mutableStateOf(settingManager.isVibrationOn) }
+
+    val userState by viewModel.userState.collectAsState()
+    val aiAvatarPath = userState?.aiAvatarPath ?: "ic_ai_avatar_placeholder"
+
+    val cropOptions = remember {
+        CropImageContractOptions(
+            uri = null,
+            cropImageOptions = CropImageOptions(
+                imageSourceIncludeGallery = false,
+                imageSourceIncludeCamera = true,
+                guidelines = CropImageView.Guidelines.ON,
+                aspectRatioX = 1,
+                aspectRatioY = 1,
+                fixAspectRatio = true
+            )
+        )
+    }
+
+    val cropImageLauncher = rememberLauncherForActivityResult(contract = CropImageContract()) { result ->
+        if (result.isSuccessful) {
+            result.uriContent?.let { uri ->
+                scope.launch {
+                    onGetAiPhoto(uri)
+                }
+            }
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            cropImageLauncher.launch(cropOptions)
+        }
+    }
+
+    val onAiPortraitClick: () -> Unit = {
+        val permission = Manifest.permission.CAMERA
+        if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) {
+            cropImageLauncher.launch(cropOptions)
+        } else {
+            cameraPermissionLauncher.launch(permission)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -169,15 +242,24 @@ private fun Modal(onBack: () -> Unit) {
 
                         Spacer(modifier = Modifier.height(scale.dp(46f)))
 
-                        OptionItem("Alarm \"Your turn\"", isAlarmOn) { isAlarmOn = it }
+                        OptionItem("Alarm \"Your turn\"", isAlarmOn) {
+                            isAlarmOn = it
+                            settingManager.isAlarmOn = it
+                        }
 
                         Spacer(modifier = Modifier.height(scale.dp(28f)))
 
-                        OptionItem("Music", isMusicOn) { isMusicOn = it }
+                        OptionItem("Music", isMusicOn) {
+                            isMusicOn = it
+                            settingManager.isMusicOn = it
+                        }
 
                         Spacer(modifier = Modifier.height(scale.dp(28f)))
 
-                        OptionItem("Vibration", isVibrationOn) { isVibrationOn = it }
+                        OptionItem("Vibration", isVibrationOn) {
+                            isVibrationOn = it
+                            settingManager.isVibrationOn = it
+                        }
 
                         Spacer(modifier = Modifier.height(scale.dp(28f)))
 
@@ -209,9 +291,20 @@ private fun Modal(onBack: () -> Unit) {
                                     .size(scale.dp(70f)),
                                 contentAlignment = Alignment.Center
                             ) {
+                                val aiAvatarPainter = if (aiAvatarPath != "ic_ai_avatar_placeholder") {
+                                    rememberAsyncImagePainter(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(File(aiAvatarPath))
+                                            .build(),
+                                        error = painterResource(R.drawable.ic_ai_avatar_placeholder)
+                                    )
+                                } else {
+                                    painterResource(id = R.drawable.ic_ai_avatar_placeholder)
+                                }
+
                                 SixthButton(
-                                    onClick = {  },
-                                    imagePainter = painterResource(id = R.drawable.ic_ai_avatar_placeholder)                                 )
+                                    onClick = onAiPortraitClick,
+                                    imagePainter = aiAvatarPainter                                 )
                             }
                         }
 

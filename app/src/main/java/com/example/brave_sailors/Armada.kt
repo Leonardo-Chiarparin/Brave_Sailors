@@ -40,7 +40,6 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -52,8 +51,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.brave_sailors.data.local.database.AppDatabase
-import com.example.brave_sailors.data.remote.api.RetrofitClient
-import com.example.brave_sailors.data.remote.api.SailorApi
 import com.example.brave_sailors.data.repository.UserRepository
 import com.example.brave_sailors.model.FleetUiEvent
 import com.example.brave_sailors.model.FleetViewModel
@@ -86,7 +83,7 @@ val SHIP_COLORS = mapOf(
 )
 val DEFAULT_SHIP_COLOR = Orange
 
-private data class DragState(
+data class DragState(
     val isDragging: Boolean = false,
     val draggedShipSize: Int = 0,
     val currentDragOffset: Offset = Offset.Zero,
@@ -94,12 +91,12 @@ private data class DragState(
 )
 
 @Composable
-fun FleetScreen(db: AppDatabase, repository: UserRepository) {
-    Modal(db, repository)
+fun FleetScreen(db: AppDatabase, repository: UserRepository, onConfirm: () -> Unit) {
+    Modal(db, repository, onConfirm)
 }
 
 @Composable
-private fun Modal(db: AppDatabase, repository: UserRepository) {
+private fun Modal(db: AppDatabase, repository: UserRepository, onConfirm: () -> Unit) {
     val scale = RememberScaleConversion()
 
     val cellSize = scale.dp(64f)
@@ -117,11 +114,16 @@ private fun Modal(db: AppDatabase, repository: UserRepository) {
     val density = LocalDensity.current
     val snackBarHostState = remember { SnackbarHostState() }
 
+    if (state.isLoading) {
+        Box(modifier = Modifier.fillMaxSize())
+        return
+    }
+
     LaunchedEffect(Unit) {
         viewModel.events.collect { ev ->
             when (ev) {
                 is FleetUiEvent.Message -> {  }
-                is FleetUiEvent.SaveSuccess -> {  }
+                is FleetUiEvent.SaveSuccess -> { onConfirm() }
             }
         }
     }

@@ -30,8 +30,6 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -269,7 +267,13 @@ private fun EditSection(
 ) {
     val context = LocalContext.current
     val currentFlag = remember(user?.countryCode, availableFlags) {
-        availableFlags.find { it.code == user?.countryCode } ?: availableFlags.firstOrNull()
+        if (user?.countryCode.isNullOrBlank()) {
+            null
+        } else {
+            availableFlags.find {
+                it.code.trim().equals(user.countryCode.trim(), ignoreCase = true)
+            }
+        }
     }
 
     val scale = RememberScaleConversion()

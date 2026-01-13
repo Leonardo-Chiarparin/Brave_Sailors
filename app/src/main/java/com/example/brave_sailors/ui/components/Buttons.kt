@@ -70,6 +70,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -288,6 +289,8 @@ fun SecondaryButton(paddingH: Float, paddingV: Float, text: String, onClick: () 
             fontFamily = FontFamily.SansSerif,
             fontWeight = FontWeight.Medium,
             letterSpacing = scale.sp(2f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             style = TextStyle(
                 platformStyle = PlatformTextStyle(
                     includeFontPadding = false
@@ -1477,7 +1480,7 @@ fun FleetButton(paddingH: Float, paddingV: Float, text: String, onClick: () -> U
 }
 
 @Composable
-fun GoButton(onClick: () -> Unit) {
+fun GoButton(enabled: Boolean, onClick: () -> Unit) {
     val scale = RememberScaleConversion()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1508,6 +1511,7 @@ fun GoButton(onClick: () -> Unit) {
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                enabled = enabled,
                 onClick = onClick
             )
             .padding(horizontal = scale.dp(76f), vertical = scale.dp(20f)),

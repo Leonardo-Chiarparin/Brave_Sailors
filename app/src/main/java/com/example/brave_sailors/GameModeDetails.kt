@@ -55,6 +55,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.brave_sailors.data.local.database.AppDatabase
+import com.example.brave_sailors.model.GameModeDetailsViewModel
+import com.example.brave_sailors.model.GameModeDetailsViewModelFactory
 import com.example.brave_sailors.ui.components.BackButton
 import com.example.brave_sailors.ui.components.ContinueButton
 import com.example.brave_sailors.ui.components.DialogDeployment
@@ -68,15 +72,17 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun GameModeDetailsScreen(
-    gameModeIndex: Int, // 0 = Single player vs. computer
+    db: AppDatabase,
+    gameModeIndex: Int, // 0 = Single player vs. computer, 1 = Player 1 vs. player 2 on the same device, 2 = Play with friends online vs. kith
     onBack: () -> Unit,
     onContinue: (String?, String) -> Unit // difficulty ( it is relevant for option 0 ) and firing rule
 ) {
-    Modal(gameModeIndex, onBack, onContinue)
+    Modal(db, gameModeIndex, onBack, onContinue)
 }
 
 @Composable
 private fun Modal(
+    db: AppDatabase,
     gameModeIndex: Int,
     onBack: () -> Unit,
     onContinue: (String?, String) -> Unit
@@ -85,6 +91,11 @@ private fun Modal(
     val maxWidth = scale.dp(720f)
 
     val bgColor = Color(0xFF26768E)
+
+    // ViewModel initialization
+    val viewModel: GameModeDetailsViewModel = viewModel(
+        factory = GameModeDetailsViewModelFactory(db.fleetDao(), db.userDao())
+    )
 
     val scope = rememberCoroutineScope()
 
@@ -98,7 +109,7 @@ private fun Modal(
 
     var showDialogErrorVsComputer by remember { mutableStateOf(false) }
     var showDialogErrorVsPlayer2 by remember { mutableStateOf(false) }
-    var showDialogErrorVsKith by remember { mutableStateOf(false) }
+    var showDialogErrorVsKith by remember { mutableStateOf(false) } // Kith coincides with the remote opponent
 
     LaunchedEffect(Unit) {
         buttonsVisible = true
@@ -110,6 +121,27 @@ private fun Modal(
             delay(200)
             callback()
         }
+    }
+
+    // Centralized logic to validate the fleet
+    fun validateAndContinue() {
+        viewModel.validateFleetAndProceed(
+            gameModeIndex = gameModeIndex,
+            difficulty = difficulty,
+            firingRule = firingRule,
+            onFleetFound = { diff, rule ->
+                // The armada has been found. Proceed to the next page.
+                onContinue(diff, rule)
+            },
+            onFleetMissing = { mode ->
+                // Fleet not retrieved. Open the correct dialog.
+                when (mode) {
+                    0 -> showDialogErrorVsComputer = true
+                    1 -> showDialogErrorVsPlayer2 = true
+                    2 -> showDialogErrorVsKith = true
+                }
+            }
+        )
     }
 
     Box(
@@ -165,6 +197,7 @@ private fun Modal(
 
                 Spacer(modifier = Modifier.height(scale.dp(74f)))
 
+                // Show the difficulty selection only if the chosen mode is against the computer
                 if (gameModeIndex == 0) {
                     SettingsRow(
                         option = "DIFFICULTY",
@@ -212,55 +245,17 @@ private fun Modal(
                         enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
                         exit = slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(200)) + fadeOut(animationSpec = tween(200))
                     ) {
-                        when (gameModeIndex) {
-                            0 -> {
-                                ContinueButton(
-                                    text = "Continue",
-                                    onClick = {
-                                        // [ TO - DO ]: If the user has not a formation, then it must be triggered a DialogError with the message "Armada could not be found."
-                                        // if (!fleet.isNullOrEmpty)
-                                            onContinue(difficulty, firingRule) // go to the next page, which requires parameters as difficulty, firingRules, and so on to prepare the match and update its state ( the grid, the result, etc. )... [ NOTE ]: Take a look at HomeScreen
-                                        // else
-                                        //  showDialogErrorVsComputer = true
-                                    }
-                                )
-                            }
-                            1 -> {
-                                ContinueButton(
-                                    text = "Continue",
-                                    onClick = {
-                                        // [ TO - DO ]: If the user (which coincides with the Player 1 in this case ) has not a formation, then it must be triggered a DialogError with the message "Player 1's armada could not be found. Configure it on the dedicated view to allow the opposing user to proceed."
-                                        // e.g.
-                                        // if (!fleet.isNullOrEmpty)
-                                            onContinue(null, firingRule)
-                                        // else
-                                        //  showDialogErrorVsPlayer2 = true
-                                    }
-                                )
-                            }
-                            2 -> {
-                                ContinueButton(
-                                    text = "Continue",
-                                    onClick = {
-                                        // [ TO - DO ]: If the user (which coincides with the Player 1 in this case ) has not a formation, then it must be triggered a DialogError with the message "Armada could not be found."
-                                        // e.g.
-                                        // if (!fleet.isNullOrEmpty)
-                                            onContinue(null, firingRule)
-                                        //  go to the next page, which requires parameters as difficulty, firingRules, ProfileViewModel, and so on to prepare the match and update its state ( the grid, the result, etc. )...
-                                        // else
-                                        //  showDialogErrorVsKith = true
-                                    }
-                                )
-                            }
-                            else -> {}
-                        }
+                        // Single ContinueButton that calls the aforementioned validation
+                        ContinueButton(
+                            text = "Continue",
+                            onClick = { validateAndContinue() }
+                        )
                     }
                 }
             }
         }
 
         // -- DIALOGS --
-        // -- Options --
         if (showDialogDifficulty) {
             DialogDifficulty(
                 currentDifficulty = difficulty,

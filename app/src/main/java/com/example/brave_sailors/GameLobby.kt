@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,9 +67,15 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.brave_sailors.data.local.database.AppDatabase
 import com.example.brave_sailors.data.remote.api.Flag
+import com.example.brave_sailors.model.GameLobbyViewModel
+import com.example.brave_sailors.model.GameLobbyViewModelFactory
+import com.example.brave_sailors.model.ProfileViewModel
+import com.example.brave_sailors.ui.components.DialogLoading
 import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.theme.DarkGrey
 import com.example.brave_sailors.ui.theme.DeepBlue
@@ -79,23 +86,70 @@ import com.example.brave_sailors.ui.utils.RememberScaleConversion
 import kotlinx.coroutines.delay
 
 data class LobbyPlayer(
+    val id: String,
     val name: String,
     val countryCode: String,
-    val avatarUrl: String? = null
+    val avatarUrl: String? = null,
+    val wins: Int = 0,
+    val losses: Int = 0
 )
+
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GameLobbyScreen(
+    db: AppDatabase,
     availableFlags: List<Flag>,
+    selectedFiringRule: String,
     onBack: () -> Unit,
-    onChosenPlayer: (LobbyPlayer) -> Unit
+    onMatchStart: (LobbyPlayer, String) -> Unit
 ) {
-    Modal(availableFlags, onBack, onChosenPlayer)
+    val viewModel: GameLobbyViewModel = viewModel(
+        factory = GameLobbyViewModelFactory(db.userDao(), db.friendDao())
+    )
+
+    Modal(viewModel, availableFlags, selectedFiringRule, onBack, onMatchStart)
 }
 
 @Composable
 private fun Modal(
+    viewModel: GameLobbyViewModel,
+    availableFlags: List<Flag>,
+    selectedFiringRule: String,
+    onBack: () -> Unit,
+    onMatchStart: (LobbyPlayer, String) -> Unit
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(uiState.matchFound, uiState.activeMatchId) {
+        if (uiState.matchFound && uiState.selectedOpponent != null && uiState.activeMatchId != null) {
+            onMatchStart(uiState.selectedOpponent!!, uiState.activeMatchId!!)
+            viewModel.onMatchStartedConsumed()
+        }
+    }
+
+    GameLobbyContent(
+        friendsList = uiState.friends,
+        availableFlags = availableFlags,
+        onBack = onBack,
+        onChosenPlayer = { player ->
+            viewModel.onSelectOpponent(player, selectedFiringRule)
+        }
+    )
+
+    if (uiState.isMatching) {
+        DialogLoading(
+            text = "Waiting for ${uiState.selectedOpponent?.name} to accept...",
+            onDismiss = {
+                viewModel.onCancelMatching()
+            }
+        )
+    }
+}
+
+@Composable
+private fun GameLobbyContent(
+    friendsList: List<LobbyPlayer>,
     availableFlags: List<Flag>,
     onBack: () -> Unit,
     onChosenPlayer: (LobbyPlayer) -> Unit
@@ -108,22 +162,7 @@ private fun Modal(
     var searchText by remember { mutableStateOf("") }
     var appliedFilter by remember { mutableStateOf("") }
 
-    val lobbyList = listOf(
-        LobbyPlayer("Ammiraglio Ispettore", "IT", null),
-        LobbyPlayer("davideettore", "IT", null),
-        LobbyPlayer("Direttorefotografia", "FR", null),
-        LobbyPlayer("Ettore 16", "IT", null),
-        LobbyPlayer("Ettore Aloe", "IT", null),
-        LobbyPlayer("Ettore02", "IT", null),
-        LobbyPlayer("Ettore5", "IT", null),
-        LobbyPlayer("ettore58180", "IT", null),
-        LobbyPlayer("ettore999", "IT", null),
-        LobbyPlayer("CommanderX", "US", null),
-        LobbyPlayer("SeaWolf", "DE", null),
-        LobbyPlayer("Poseidon", "GR", null)
-    )
-
-    val filteredList = if (appliedFilter.isBlank()) lobbyList else lobbyList.filter {
+    val filteredList = if (appliedFilter.isBlank()) friendsList else friendsList.filter {
         it.name.contains(appliedFilter, ignoreCase = true)
     }
 

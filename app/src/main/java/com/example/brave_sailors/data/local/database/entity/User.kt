@@ -2,17 +2,24 @@ package com.example.brave_sailors.data.local.database.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.google.firebase.database.IgnoreExtraProperties
 
+@IgnoreExtraProperties
 @Entity(tableName = "users")
 data class User(
-    @PrimaryKey val id: String,
-    val email: String,
+    @PrimaryKey val id: String = "",
+    val email: String = "",
     val sessionToken: String? = null,
-    val name: String,
-    val profilePictureUrl: String?,
+    val name: String = "",
+    val profilePictureUrl: String? = null,
 
-    val googleName: String,
-    val googlePhotoUrl: String?,
+    val googleName: String = "",
+    val googlePhotoUrl: String? = null,
+
+    val registerEmail: String? = null,
+    val password: String? = null,
+
+    val aiAvatarPath: String? = null,
 
     val countryCode: String? = null,
     val lastUpdated: Long = System.currentTimeMillis(),

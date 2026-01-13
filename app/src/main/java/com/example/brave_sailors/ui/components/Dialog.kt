@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -103,6 +104,12 @@ sealed interface ActiveDialog {
     data object Flag : ActiveDialog
     data object Name : ActiveDialog
     data object Friend : ActiveDialog
+
+    // Game Options Dialogs
+    data class AiFilter(val uri: Uri) : ActiveDialog
+
+    // Armada Dialogs
+    data object Deployment : ActiveDialog
 
     // System / Errors
     data class Error(val message: String, val source: DialogSource) : ActiveDialog
@@ -1022,7 +1029,7 @@ fun DialogInstructions(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(scale.dp(1060f))
+                                .height(scale.dp(1060f)) // ex. 322f
                         ) {
                             CompositionLocalProvider(
                                 LocalOverscrollFactory provides null
@@ -1040,7 +1047,7 @@ fun DialogInstructions(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                text = "Topic",
+                                                text = "Questions?",
                                                 color = White,
                                                 fontSize = scale.sp(30f),
                                                 textAlign = TextAlign.Center,
@@ -1064,13 +1071,14 @@ fun DialogInstructions(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(scale.dp(192f))
-                                                .background(Color(0xFF323432)),
+                                                .background(Color(0xFF323432))
+                                                .padding(horizontal = scale.dp(22f)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                text = "Description",
+                                                text = "All responses will be provided during the demo presentation.",
                                                 color = White,
-                                                fontSize = scale.sp(24f),
+                                                fontSize = scale.sp(26f),
                                                 textAlign = TextAlign.Center,
                                                 fontFamily = FontFamily.SansSerif,
                                                 fontWeight = FontWeight.Medium,
@@ -1249,7 +1257,7 @@ fun DialogPassword(
                                 paddingV = 24f,
                                 text = "OK",
                                 onClick = {
-                                    if (emailText.isNotBlank() && emailText.contains("@")) {
+                                    if (emailText.isNotBlank()) {
                                         onConfirm(emailText.trim())
                                     }
                                 },
@@ -2167,7 +2175,7 @@ fun DialogFiringRules(
     var selectedRule by remember { mutableStateOf(currentRule) }
 
     val description = when (selectedRule) {
-        "Sequential hits" -> "Keep firing until a shot lands."
+        "Sequential hits" -> "Keep firing until a shot misses."
         "Chain attacks" -> "Hit as long as ships remain."
         "One shot" -> "Lone strike per turn."
         else -> ""
@@ -2657,7 +2665,7 @@ fun DialogMatchResult(
 
                     Box(
                         modifier = Modifier
-                            .padding(horizontal = scale.dp(132f)),
+                            .padding(horizontal = scale.dp(102f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -2675,8 +2683,6 @@ fun DialogMatchResult(
                                 fontFamily = FontFamily.SansSerif,
                                 fontWeight = FontWeight.Medium,
                                 letterSpacing = scale.sp(2f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                                 style = TextStyle(
                                     platformStyle = PlatformTextStyle(includeFontPadding = false),
                                     lineHeightStyle = LineHeightStyle(
@@ -2929,6 +2935,233 @@ fun DialogLoading(
                         modifier = Modifier.size(scale.dp(26f))
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogChallengeResult(
+    isWin: Boolean,
+    timeElapsed: Long? = null,
+    buttonText: String,
+    onConfirm: () -> Unit,
+    onRetry: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+
+    val boxShape = CutCornerShape(scale.dp(24f))
+    val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
+
+    val maxWidth = scale.dp(646f)
+
+    val buttonSize = scale.dp(74f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null) {  }
+            .graphicsLayer(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = maxWidth),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = scale.dp(50f))
+                    .fillMaxWidth()
+                    .background(DarkBlue, shape = boxShape)
+                    .border(BorderStroke(scale.dp(1f), Orange), shape = boxShape)
+                    .clip(boxShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(vertical = scale.dp(26f), horizontal = scale.dp(12f))
+                        .clip(RectangleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GridBackground(Modifier.matchParentSize(), color = LightBlue, 14f)
+
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = scale.dp(102f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(modifier = Modifier.height(scale.dp(146f)))
+
+                            Text(
+                                text = if (isWin) {
+                                    "Mission completed" + if (timeElapsed != null) " in ${timeElapsed}s." else "."
+                                } else
+                                     "Mission failed" + if (timeElapsed != null) " in ${timeElapsed}s." else ".",
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(30f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(210f)))
+
+                            PrimaryButton(
+                                paddingH = 112f,
+                                paddingV = 28f,
+                                text = buttonText,
+                                onClick = onConfirm,
+                                enabled = true
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(80f)))
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(buttonSize)
+                        .background(DarkBlue, shape = closeButtonShape)
+                        .border(BorderStroke(scale.dp(1f), Orange), shape = closeButtonShape)
+                        .clip(closeButtonShape)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = onRetry
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Retry",
+                        tint = White,
+                        modifier = Modifier.size(scale.dp(26f))
+                    )
+                }
+            }
+
+            Box(modifier = Modifier.zIndex(1f)) {
+                Tab(
+                    paddingH = 124f,
+                    paddingV = 32f,
+                    text = "Result"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogFleetConfirm(
+    onConfirm: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val scale = RememberScaleConversion()
+
+    val boxShape = CutCornerShape(scale.dp(24f))
+    val maxWidth = scale.dp(646f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Blue)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null) {  }
+            .graphicsLayer(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = maxWidth),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = scale.dp(50f))
+                    .fillMaxWidth()
+                    .background(DarkBlue, shape = boxShape)
+                    .border(BorderStroke(scale.dp(1f), Orange), shape = boxShape)
+                    .clip(boxShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(vertical = scale.dp(26f), horizontal = scale.dp(12f))
+                        .clip(RectangleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GridBackground(Modifier.matchParentSize(), color = LightBlue, 14f)
+
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = scale.dp(60f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(modifier = Modifier.height(scale.dp(146f)))
+
+                            Text(
+                                text = "Armada deployed correctly.",
+                                color = White,
+                                textAlign = TextAlign.Center,
+                                fontSize = scale.sp(30f),
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = scale.sp(2f),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    shadow = Shadow(Color.Black, Offset(2f, 2f), 4f)
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(212f)))
+
+                            PrimaryButton(
+                                paddingH = 112f,
+                                paddingV = 28f,
+                                text = "OK",
+                                onClick = onConfirm,
+                                enabled = true
+                            )
+
+                            Spacer(modifier = Modifier.height(scale.dp(80f)))
+                        }
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.zIndex(1f)) {
+                Tab(134f, 32f, text = "Formation")
             }
         }
     }

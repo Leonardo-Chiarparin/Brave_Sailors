@@ -13,7 +13,28 @@
           "package_name": "com.example.brave_sailors"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "458450729028-30pdjo01jp795cirql2opell8m95joa7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.brave_sailors",
+            "certificate_hash": "a64a75d049bfcc421a850d039d55d8bdcf97ad08"
+          }
+        },
+        {
+          "client_id": "458450729028-61gtg8t63tfcp7sheui371dps859tivu.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.brave_sailors",
+            "certificate_hash": "a8c25149cb6f86b0bfc582ee6e442ffb0a4c9bb0"
+          }
+        },
+        {
+          "client_id": "458450729028-qb2qr2rkd1b11p6b9l4s2l29rdp5kt0u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAb--2HxLLQC4Jy8UEuNt-vFUeZ3Se4yWs"
@@ -21,7 +42,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "458450729028-qb2qr2rkd1b11p6b9l4s2l29rdp5kt0u.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

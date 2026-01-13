@@ -114,6 +114,7 @@ fun Profile(viewModel: ProfileViewModel) {
     val flagList = viewModel.flagList.collectAsState()
     val availableFlags = flagList.value
 
+    // [ NOTE ]: Observe the user's state to get dynamic statistics
     val user by viewModel.userState.collectAsState()
 
     val scale = RememberScaleConversion()
@@ -312,22 +313,30 @@ fun Profile(viewModel: ProfileViewModel) {
                                 .padding(all = scale.dp(14f)),
                             contentAlignment = Alignment.TopCenter
                         ) {
-                            val currentFlag = remember(user?.countryCode) {
-                                availableFlags.find { it.code == user?.countryCode } ?: availableFlags.first()
+                            val currentFlag = remember(user?.countryCode, availableFlags) {
+                                if (user?.countryCode == null) {
+                                    null
+                                } else {
+                                    availableFlags.find { it.code.trim().equals(user?.countryCode?.trim(), ignoreCase = true) }
+                                }
                             }
 
-                            Image(
-                                painter = rememberAsyncImagePainter(
-                                    model = ImageRequest.Builder(LocalContext.current)
-                                        .data(currentFlag.flagUrl)
-                                        .build()
-                                ),
-                                contentDescription = currentFlag.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .width(scale.dp(168f))
-                                    .fillMaxHeight()
-                            )
+                            if (currentFlag != null) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(currentFlag.flagUrl)
+                                            .build()
+                                    ),
+                                    contentDescription = currentFlag.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .width(scale.dp(168f))
+                                        .fillMaxHeight()
+                                )
+                            }
+                            else
+                                Box(modifier = Modifier.width(scale.dp(168f)).fillMaxHeight())
                         }
                     }
 
@@ -476,7 +485,12 @@ fun Profile(viewModel: ProfileViewModel) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .padding(top = scale.dp(8f), bottom = scale.dp(14f), start = scale.dp(28f), end = scale.dp(28f)),
+                                    .padding(
+                                        top = scale.dp(8f),
+                                        bottom = scale.dp(14f),
+                                        start = scale.dp(28f),
+                                        end = scale.dp(28f)
+                                    ),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -510,9 +524,8 @@ fun Profile(viewModel: ProfileViewModel) {
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // [ TO - DO ]: Substitute the static values inside the following printings
                                     Text(
-                                        "WON\t\t\t0",
+                                        "WON\t\t\t${user?.wins ?: 0}",
                                         color = White,
                                         textAlign = TextAlign.Center,
                                         fontSize = scale.sp(18f),
@@ -538,7 +551,7 @@ fun Profile(viewModel: ProfileViewModel) {
                                     )
 
                                     Text(
-                                        "LOST\t\t\t0",
+                                        "LOST\t\t\t${user?.losses ?: 0}",
                                         color = White,
                                         textAlign = TextAlign.Center,
                                         fontSize = scale.sp(18f),
@@ -938,7 +951,12 @@ fun Match(
                             Column(
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .padding(top = scale.dp(8f), bottom = scale.dp(14f), start = scale.dp(28f), end = scale.dp(28f)),
+                                    .padding(
+                                        top = scale.dp(8f),
+                                        bottom = scale.dp(14f),
+                                        start = scale.dp(28f),
+                                        end = scale.dp(28f)
+                                    ),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -972,7 +990,6 @@ fun Match(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // [ TO - DO ]: Substitute the static values inside the following printings
                                     Text(
                                         "WON\t\t\t$wins",
                                         color = White,

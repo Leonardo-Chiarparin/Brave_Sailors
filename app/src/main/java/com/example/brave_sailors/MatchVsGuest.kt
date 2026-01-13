@@ -23,12 +23,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddCircleOutline
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,14 +44,29 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.brave_sailors.data.local.database.AppDatabase
 import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.data.remote.api.Flag
+import com.example.brave_sailors.data.remote.api.RetrofitClient
+import com.example.brave_sailors.data.repository.UserRepository
+import com.example.brave_sailors.model.CellStatus
+import com.example.brave_sailors.model.GridCell
+import com.example.brave_sailors.model.MatchGuestUiState
+import com.example.brave_sailors.model.MatchType
+import com.example.brave_sailors.model.MatchVsGuestViewModel
+import com.example.brave_sailors.model.MatchVsGuestViewModelFactory
+import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.components.DialogMatchResult
 import com.example.brave_sailors.ui.components.DialogRetire
 import com.example.brave_sailors.ui.components.DialogTurn
@@ -59,19 +78,88 @@ import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
+// [ NOTE ]: Color utilized for hit/miss markers
+val GuestRed = Color(0xFFE00814)
+
 @Composable
 fun MatchVsGuestScreen(
+    profileViewModel: ProfileViewModel,
     firingRule: String,
     user: User?,
     flag: Flag?,
     onRetire: () -> Unit,
-    onComplete: (Boolean) -> Unit // true if P1 ( us ) wins, false otherwise
+    onComplete: (Boolean) -> Unit // true if P1 ( User ) wins, false otherwise
 ) {
-    Modal(firingRule, user, flag, onRetire, onComplete)
+    val context = LocalContext.current
+    val db = AppDatabase.getDatabase(context)
+
+    // ViewModel initialization ( for the "local" guest )
+    val repository = remember {
+        UserRepository(
+            RetrofitClient.api,
+            db.userDao(),
+            db.fleetDao(),
+            db.friendDao(),
+            db.matchDao()
+        )
+    }
+
+    val viewModel: MatchVsGuestViewModel = viewModel(
+        factory = MatchVsGuestViewModelFactory(context, db.userDao(), db.fleetDao(), repository)
+    )
+
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.initializeMatch(firingRule)
+
+        profileViewModel.setMatchActive(
+            context,
+            matchId = "GUEST_MATCH_${System.currentTimeMillis()}",
+            "Player 2",
+            MatchType.GUEST
+        )
+    }
+
+    LaunchedEffect(uiState.isPlayer1Turn) {
+        profileViewModel.updateActiveTurn(context, uiState.isPlayer1Turn)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            profileViewModel.clearActiveMatch(context)
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    viewModel.onAppBackground()
+                }
+
+                Lifecycle.Event.ON_RESUME -> {
+                    viewModel.onAppForeground()
+                }
+
+                else -> {  }
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    Modal(uiState, viewModel, firingRule, user, flag, onRetire, onComplete)
 }
 
 @Composable
 private fun Modal(
+    uiState: MatchGuestUiState,
+    viewModel: MatchVsGuestViewModel,
     firingRule: String,
     user: User?,
     flag: Flag?,
@@ -81,16 +169,13 @@ private fun Modal(
     val scale = RememberScaleConversion()
     val maxWidth = scale.dp(720f)
 
-    // ...
-    var isPlayer1Turn by remember { mutableStateOf(false) }
-    var turnNumber by remember { mutableIntStateOf(1) }
+    val isPlayer1Turn = uiState.isPlayer1Turn
+    val turnNumber = uiState.turnNumber
 
     var showDialogRetire by remember { mutableStateOf(false) }
-    var showDialogMatchResult by remember { mutableStateOf(false) }
 
-    var showDialogTurn by remember { mutableStateOf(true) }
-
-    var isPlayer1Winner by remember { mutableStateOf(false) }
+    // Control state for the "Pass Device" dialog. Such element blocks the view so players don't see each other ships during the swap
+    val showTurnDialog = uiState.showTurnDialog
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -135,7 +220,7 @@ private fun Modal(
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
-                            enabled = true,
+                            enabled = !uiState.isGameOver,
                             onClick = { showDialogRetire = true }
                         ),
                     contentAlignment = Alignment.Center
@@ -151,14 +236,13 @@ private fun Modal(
 
             Spacer(modifier = Modifier.height(scale.dp(42f)))
 
-            // [ TO - DO ]: Adjust the player's statistics
             if (isPlayer1Turn) {
                 Match(
                     name = user?.name ?: "Sailor",
                     avatarUrl = user?.profilePictureUrl,
                     flagUrl = flag?.flagUrl,
-                    wins = (0).toString(),
-                    losses = (0).toString(),
+                    wins = user?.wins.toString(),
+                    losses = user?.losses.toString(),
                     isAi = false
                 )
             } else {
@@ -186,26 +270,38 @@ private fun Modal(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // -- FLEET STATUS --
+                // The composition of the opponent's fleet is displayed ( the target )
                 FleetStatus(
                     turn = turnNumber,
-                    isPlayerTurn = true // Leave this fixed ( however the blocks displayed must be rearranged according to the user )
+                    isPlayerTurn = true, // Visually treated as player looking at the enemy radar
+                    shipsRemaining = uiState.currentEnemyFleetComposition
                 )
 
                 Spacer(modifier = Modifier.height(scale.dp(28f)))
 
-                GameGrid()
+                // -- GAME GRID --
+                val targetGrid = if (isPlayer1Turn) uiState.p2Grid else uiState.p1Grid
+
+                GameGridGuest(
+                    grid = targetGrid,
+                    onCellClick = { row, column ->
+                        if (!uiState.isGameOver && !showTurnDialog)
+                            viewModel.onFire(row, column)
+                    }
+                )
             }
         }
 
         // --- DIALOGS ---
-        if (showDialogTurn) {
-            val currentPlayerName = if (isPlayer1Turn) (user?.name ?: "Player 1") else "Player 2"
+        if (showTurnDialog && !uiState.isGameOver) {
+            val nextPlayerName = if (isPlayer1Turn) (user?.name ?: "Player 1") else "Player 2"
 
             DialogTurn(
                 turnNumber = turnNumber,
-                playerName = currentPlayerName,
+                playerName = nextPlayerName,
                 onConfirm = {
-                    showDialogTurn = false
+                    viewModel.closeTurnDialog()
                 }
             )
         }
@@ -215,20 +311,20 @@ private fun Modal(
                 onDismiss = { showDialogRetire = false },
                 onConfirm = {
                     showDialogRetire = false
+                    viewModel.onRetire()
                     onRetire()
                 }
             )
         }
 
-        if (showDialogMatchResult) {
-            val winnerName = if (isPlayer1Winner) (user?.name ?: "Sailor") else "Player 2"
+        if (uiState.isGameOver) {
+            val winnerName = uiState.winnerName
 
             DialogMatchResult(
                 turnNumber = turnNumber,
                 winnerName = winnerName,
                 onConfirm = {
-                    showDialogMatchResult = false
-                    onComplete(isPlayer1Winner)
+                    onComplete(uiState.isPlayer1Winner)
                 }
             )
         }
@@ -236,7 +332,10 @@ private fun Modal(
 }
 
 @Composable
-private fun GameGrid() {
+private fun GameGridGuest(
+    grid: List<List<GridCell>>,
+    onCellClick: (Int, Int) -> Unit
+) {
     val scale = RememberScaleConversion()
 
     val cellSize = scale.dp(64f)
@@ -345,12 +444,40 @@ private fun GameGrid() {
                         )
                     )
             ) {
+                Column {
+                    for (row in 0 until GRID_SIZE) {
+                        Row {
+                            for (col in 0 until GRID_SIZE) {
+                                val cell = if (grid.isNotEmpty() && row < grid.size && col < grid[0].size) grid[row][col] else GridCell(row, col)
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(cellSize)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            enabled = cell.status != CellStatus.HIT && cell.status != CellStatus.MISS,
+                                            onClick = { onCellClick(row, col) }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (cell.status == CellStatus.HIT) {
+                                        Icon(imageVector = Icons.Default.AddCircleOutline, contentDescription = "Hit", tint = GuestRed, modifier = Modifier.size(scale.dp(42f)))
+                                    }
+
+                                    if (cell.status == CellStatus.MISS) {
+                                        Icon(imageVector = Icons.Default.Close, contentDescription = "Miss", tint = White, modifier = Modifier.size(scale.dp(42f)))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .size(cellSize * GRID_SIZE)
                 ) {
-                    // -- PLACEMENT ( if the AI's turn is ongoing ) --
-
                     GridLinesOverlay(GRID_SIZE, cellSize)
                 }
             }
