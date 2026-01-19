@@ -1,5 +1,6 @@
 package com.example.brave_sailors.ui.utils
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.hardware.camera2.CameraManager
 import android.media.MediaPlayer
@@ -15,9 +16,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Manages Game Options: Alarm (Flashlight), Music, and Vibration.
- */
+@SuppressLint("UseKtx")
 class GameSettingsManager(private val context: Context) {
 
     private val prefs = context.getSharedPreferences("game_options", Context.MODE_PRIVATE)
@@ -32,7 +31,6 @@ class GameSettingsManager(private val context: Context) {
         private var mediaPlayer: MediaPlayer? = null
     }
 
-    // -- SETTINGS PROPERTIES --
     var isAlarmOn: Boolean
         get() = prefs.getBoolean("alarm_on", true)
         set(value) = prefs.edit().putBoolean("alarm_on", value).apply()
@@ -74,11 +72,7 @@ class GameSettingsManager(private val context: Context) {
             manageMusic(true)
     }
 
-    // -- HARDWARE LOGIC --
-
-    /**
-     * Blinks the torch (flashlight) briefly if Alarm is ON.
-     */
+    @SuppressLint("ObsoleteSdkInt")
     fun triggerTurnAlarm() {
         if (!isAlarmOn || isAppPaused) return
 
@@ -86,13 +80,13 @@ class GameSettingsManager(private val context: Context) {
 
         try {
             val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            val cameraId = cameraManager.cameraIdList[0] // Usually back camera
+            val cameraId = cameraManager.cameraIdList[0]
 
             alarmJob = CoroutineScope(Dispatchers.Main).launch {
                 try {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         cameraManager.setTorchMode(cameraId, true)
-                        delay(300) // Blink duration
+                        delay(300)
                         if (!isAppPaused) cameraManager.setTorchMode(cameraId, false)
                     }
                 } catch (e: Exception) {
@@ -104,9 +98,6 @@ class GameSettingsManager(private val context: Context) {
         }
     }
 
-    /**
-     * Vibrates the device briefly if Vibration is ON.
-     */
     fun triggerVibration() {
         if (!isVibrationOn || isAppPaused) return
 
@@ -126,9 +117,6 @@ class GameSettingsManager(private val context: Context) {
         }
     }
 
-    /**
-     * Manages background music playback.
-     */
     fun manageMusic(shouldPlay: Boolean) {
         if (shouldPlay) isGameRunning = true
 
@@ -158,7 +146,6 @@ class GameSettingsManager(private val context: Context) {
     fun releaseResources() {
         isGameRunning = false
 
-        // 1. Stop Music
         try {
             if (mediaPlayer != null) {
                 if (mediaPlayer!!.isPlaying) {
@@ -171,7 +158,6 @@ class GameSettingsManager(private val context: Context) {
             e.printStackTrace()
         }
 
-        // 2. Stop Vibration (Cancel any ongoing effect)
         try {
             getVibrator().cancel()
         } catch (e: Exception) {

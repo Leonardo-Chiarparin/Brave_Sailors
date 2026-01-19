@@ -1,3 +1,5 @@
+@file:Suppress("GradleDependency", "UseTomlInstead", "NewerVersionAvailable")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -82,6 +84,7 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
     implementation("com.google.firebase:firebase-database")
+    implementation("com.google.firebase:firebase-storage")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.vanniktech:android-image-cropper:4.5.0")

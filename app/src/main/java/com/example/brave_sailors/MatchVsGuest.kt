@@ -78,7 +78,6 @@ import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 
-// [ NOTE ]: Color utilized for hit/miss markers
 val GuestRed = Color(0xFFE00814)
 
 @Composable
@@ -88,12 +87,11 @@ fun MatchVsGuestScreen(
     user: User?,
     flag: Flag?,
     onRetire: () -> Unit,
-    onComplete: (Boolean) -> Unit // true if P1 ( User ) wins, false otherwise
+    onComplete: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val db = AppDatabase.getDatabase(context)
 
-    // ViewModel initialization ( for the "local" guest )
     val repository = remember {
         UserRepository(
             RetrofitClient.api,
@@ -174,7 +172,6 @@ private fun Modal(
 
     var showDialogRetire by remember { mutableStateOf(false) }
 
-    // Control state for the "Pass Device" dialog. Such element blocks the view so players don't see each other ships during the swap
     val showTurnDialog = uiState.showTurnDialog
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -270,17 +267,14 @@ private fun Modal(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // -- FLEET STATUS --
-                // The composition of the opponent's fleet is displayed ( the target )
                 FleetStatus(
                     turn = turnNumber,
-                    isPlayerTurn = true, // Visually treated as player looking at the enemy radar
+                    isPlayerTurn = true,
                     shipsRemaining = uiState.currentEnemyFleetComposition
                 )
 
                 Spacer(modifier = Modifier.height(scale.dp(28f)))
 
-                // -- GAME GRID --
                 val targetGrid = if (isPlayer1Turn) uiState.p2Grid else uiState.p1Grid
 
                 GameGridGuest(
@@ -293,7 +287,6 @@ private fun Modal(
             }
         }
 
-        // --- DIALOGS ---
         if (showTurnDialog && !uiState.isGameOver) {
             val nextPlayerName = if (isPlayer1Turn) (user?.name ?: "Player 1") else "Player 2"
 
@@ -340,7 +333,6 @@ private fun GameGridGuest(
 
     val cellSize = scale.dp(64f)
 
-    // [ NOTE ]: The grid must have no open-close animation ( while being replaced across the turns depending on the current player )
     Row(
         modifier = Modifier
             .fillMaxWidth()

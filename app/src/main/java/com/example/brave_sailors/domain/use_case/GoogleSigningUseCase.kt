@@ -33,22 +33,13 @@ class GoogleSigningUseCase(
     private val userDao: UserDao,
     private val webClientId: String
 ) {
-    // Instance for Realtime Database
     private val database = FirebaseDatabase.getInstance()
     private val auth = FirebaseAuth.getInstance()
 
-    /**
-     * @param context Android Context
-     * @param onlySilentLogin
-     * - If TRUE (Home Screen): Tries to silently log in to show the "Welcome Back" pill.
-     * - If FALSE (Login Screen): Forces the interactive account picker.
-     */
     suspend operator fun invoke(context: Context, onlySilentLogin: Boolean = false): SigningResult = withContext(Dispatchers.IO) {
         val credentialManager = CredentialManager.create(context)
 
         try {
-            // 1. LOCAL CHECK
-            // If a user is already in the local DB, use it without calling Google.
             if (!onlySilentLogin) {
                 val user = userDao.getCurrentUser()
                 if (user != null) {
@@ -57,29 +48,19 @@ class GoogleSigningUseCase(
                 }
             }
 
-            // 2. PREPARE OPTIONS
-            // Determine whether to attempt silent login or go straight to the picker.
-
             val result = if (onlySilentLogin) {
-                // CASE A: Home Screen (Silent Check)
-                // Attempt to retrieve credentials silently.
                 try {
                     val silentOption = setOption(webClientId, filterAuthorized = true, autoSelect = true)
                     val silentRequest = GetCredentialRequest.Builder().addCredentialOption(silentOption).build()
                     credentialManager.getCredential(request = silentRequest, context = context)
                 } catch (e: NoCredentialException) {
-                    // Silent login failed, do nothing on the home screen.
                     return@withContext SigningResult.Cancelled
                 }
             } else {
-                // CASE B: Login Screen (Explicit)
-                // We SKIP the silent login attempt here because we want to allow account switching.
-                // We go straight to the interactive request with filterAuthorized = FALSE.
-
                 val interactiveOption = setOption(
                     webClientId,
-                    filterAuthorized = false, // CRITICAL: Shows all Google accounts on the device
-                    autoSelect = false        // CRITICAL: Forces the selection popup, disables auto-login
+                    filterAuthorized = false,
+                    autoSelect = false
                 )
 
                 val interactiveRequest = GetCredentialRequest.Builder()
@@ -94,7 +75,6 @@ class GoogleSigningUseCase(
 
             val credential = result.credential
 
-            // 3. CREDENTIAL PARSING
             var gToken = ""
             var gEmail = ""
             var gName = "Sailor"
@@ -106,7 +86,6 @@ class GoogleSigningUseCase(
                 gName = credential.displayName ?: "Sailor"
                 gPhoto = credential.profilePictureUri?.toString()
             }
-            // Fallback for version mismatches (CustomCredential)
             else if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                 try {
                     val data = credential.data
@@ -127,7 +106,6 @@ class GoogleSigningUseCase(
 
             val realUserId = firebaseUser?.uid ?: getIDFromToken(gToken).ifEmpty { gEmail.replace(".", "_") }
 
-            // 4. REALTIME DATABASE SESSION
             val currentSessionToken = UUID.randomUUID().toString()
 
             try {
@@ -138,7 +116,6 @@ class GoogleSigningUseCase(
                     "lastLogin" to System.currentTimeMillis()
                 )
 
-                // Write/Merge to Realtime Database
                 database.getReference("users")
                     .child(realUserId)
                     .updateChildren(userData as Map<String, Any>)
@@ -148,7 +125,6 @@ class GoogleSigningUseCase(
                 Log.e("GoogleSigning", "Firebase DB write failed: ${e.message}")
             }
 
-            // 5. FINALIZE LOCAL LOGIN
             return@withContext handleSuccess(
                 userId = realUserId,
                 email = gEmail,
@@ -167,7 +143,6 @@ class GoogleSigningUseCase(
         }
     }
 
-    // Helper to merge Google Identity with Local Persistence
     private suspend fun handleSuccess(
         userId: String,
         email: String,
@@ -180,13 +155,13 @@ class GoogleSigningUseCase(
         val existingUser = userDao.getUserById(userId)
         val safeGooglePhotoUrl = if (googlePhotoUrl.isNullOrEmpty()) "ic_terms" else googlePhotoUrl
 
-        val userToReturn = existingUser?.// Update existing user with new Google info and session token
+        val userToReturn = existingUser?.
         copy(
             googleName = googleDisplayName,
             googlePhotoUrl = safeGooglePhotoUrl,
             sessionToken = sessionToken
         )
-            ?: // Create new user structure
+            ?:
             User(
                 id = userId,
                 email = email,

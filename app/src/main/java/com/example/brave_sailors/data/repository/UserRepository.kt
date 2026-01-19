@@ -37,27 +37,24 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 class UserRepository(
-    private val api: SailorApi, // Remote API client
-    private val userDao: UserDao, // Room DAO for user data
-    private val fleetDao: FleetDao, // Room DAO for saved fleet data
-    private val friendDao: FriendDao, // Room DAO for friends
-    private val matchDao: MatchDao, // Room DAO for matches
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance() // Firebase Auth instance
+    private val api: SailorApi,
+    private val userDao: UserDao,
+    private val fleetDao: FleetDao,
+    private val friendDao: FriendDao,
+    private val matchDao: MatchDao,
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) {
     private var currentFriendListener: ValueEventListener? = null
     private var currentFriendRef: com.google.firebase.database.DatabaseReference? = null
 
-    private val database = FirebaseDatabase.getInstance() // Firebase Realtime Database entry point
+    private val friendProfileListeners = mutableMapOf<String, ValueEventListener>()
 
-    // [ LOGIC ]: Scope for background database operations within listeners
+    private val database = FirebaseDatabase.getInstance()
+
     private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    // Exposes the Room Flow to the ViewModel so UI can react to local DB changes.
     fun getUserFlow() = userDao.getUserFlow()
 
-    /**
-     * Registers a new user, updates Firebase profile, and initializes cloud/local data.
-     */
     suspend fun registerUser(email: String, pass: String): Result<String> =
         withContext(Dispatchers.IO) {
             try {
@@ -78,7 +75,7 @@ class UserRepository(
                     )
 
                     if (updatedUser != null) {
-                        userDao.insertUser(updatedUser)
+                        userDao.updateUser(updatedUser)
                         syncLocalToCloud(updatedUser.id)
                     }
 
@@ -91,7 +88,6 @@ class UserRepository(
                         Exception("Security session expired. Please go to Settings -> Access -> Logout, then Login again via Google to refresh your session.")
                     )
                 }
-
                 else {
                     val result = auth.createUserWithEmailAndPassword(email, pass).await()
                     val newUser = result.user ?: throw Exception("Creation failed")
@@ -115,7 +111,7 @@ class UserRepository(
 
             } catch (e: FirebaseAuthUserCollisionException) {
                 return@withContext Result.failure(Exception("This email is already associated with another Brave Sailors account."))
-            } catch (e: com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException) {
+            } catch (e: FirebaseAuthRecentLoginRequiredException) {
                 return@withContext Result.failure(Exception("For security, please Logout and Login again via Google, then try registering immediately."))
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -123,19 +119,13 @@ class UserRepository(
             }
         }
 
-    /**
-     * Synchronizes current user's profile and fleet data to Firebase.
-     */
     suspend fun syncLocalToCloud(userId: String) {
         withContext(Dispatchers.IO) {
             try {
-                // Load local user; if missing, nothing to sync
                 val user = userDao.getUserById(userId) ?: return@withContext
 
-                // Cloud reference: /users/{uid}
                 val userRef = database.getReference("users").child(user.id)
 
-                // Build a JSON-like map structure matching the desired Realtime DB schema.
                 val userData = mapOf(
                     "profile" to mapOf(
                         "info" to mapOf(
@@ -144,6 +134,7 @@ class UserRepository(
                             "googleName" to user.googleName,
                             "googlePhotoUrl" to user.googlePhotoUrl,
                             "profilePictureUrl" to user.profilePictureUrl,
+                            "aiAvatarPath" to user.aiAvatarPath,
                             "countryCode" to user.countryCode,
                             "lastUpdated" to user.lastUpdated,
                             "registerEmail" to user.registerEmail,
@@ -165,7 +156,6 @@ class UserRepository(
                             "totalShotsHit" to user.totalShotsHit
                         )
                     ),
-                    // Fleet is stored as a list of ship maps under /users/{uid}/fleet
                     "fleet" to fleetDao.getUserFleet(userId).map { ship ->
                         mapOf(
                             "shipId" to ship.shipId,
@@ -179,7 +169,6 @@ class UserRepository(
                     "lastSyncTimestamp" to System.currentTimeMillis()
                 )
 
-                // Merge the data into the cloud record
                 userRef.updateChildren(userData).await()
                 Log.d("UserRepository", "Cloud Sync completed for ${user.id}")
 
@@ -189,9 +178,6 @@ class UserRepository(
         }
     }
 
-    /**
-     * Sends a password reset email if account eligibility is confirmed.
-     */
     suspend fun resetPassword(email: String): Result<String> = withContext(Dispatchers.IO) {
         return@withContext try {
             val cleanEmail = email.trim().lowercase()
@@ -213,9 +199,6 @@ class UserRepository(
         }
     }
 
-    /**
-     * Checks if email ( registerEmail ) belongs to a password-based user account.
-     */
     private suspend fun checkEmailEligibility(email: String): Boolean =
         suspendCancellableCoroutine { continuation ->
             val query = database.getReference("users")
@@ -236,22 +219,15 @@ class UserRepository(
             })
         }
 
-    /**
-     * Logs in the user, parses profile/fleet, and initializes the live friends name observer.
-     */
     suspend fun loginUser(email: String, pass: String): Result<String> =
         withContext(Dispatchers.IO) {
             try {
-                // 1) Firebase Auth login
                 val authResult = auth.signInWithEmailAndPassword(email, pass).await()
                 val uid = authResult.user?.uid ?: throw Exception("Authentication failed.")
 
                 withContext(kotlinx.coroutines.NonCancellable) {
-                    clearAllLocalData()
-
                     val newToken = UUID.randomUUID().toString()
 
-                    // 2) Fetch full user record from Realtime Database
                     val userRef = database.getReference("users").child(uid)
                     val infoRef = userRef.child("profile").child("info")
 
@@ -265,7 +241,6 @@ class UserRepository(
                         throw Exception("User could not be found in the database.")
                     }
 
-                    // 3) Parse JSON snapshot into a local User entity
                     val profile = snapshot.child("profile")
                     val info = profile.child("info")
                     val progression = profile.child("progression")
@@ -276,7 +251,9 @@ class UserRepository(
                         id = uid,
                         name = info.child("name").getValue(String::class.java) ?: "Sailor",
                         profilePictureUrl = info.child("profilePictureUrl").getValue(String::class.java)
-                            ?: "",
+                            ?: "ic_avatar_placeholder",
+
+                        aiAvatarPath = info.child("aiAvatarPath").getValue(String::class.java) ?: "ic_ai_avatar_placeholder",
 
                         email = info.child("email").getValue(String::class.java) ?: "",
                         googleName = info.child("googleName").getValue(String::class.java) ?: "",
@@ -286,8 +263,6 @@ class UserRepository(
                         registerEmail = info.child("registerEmail").getValue(String::class.java)
                             ?: email,
                         password = info.child("password").getValue(String::class.java) ?: pass,
-
-                        aiAvatarPath = "ic_ai_avatar_placeholder",
 
                         countryCode = info.child("countryCode").getValue(String::class.java) ?: "IT",
 
@@ -313,7 +288,6 @@ class UserRepository(
                         sessionToken = newToken
                     )
 
-                    // 4) Parse fleet snapshot into Room entity SavedShip
                     val fleetSnapshot = snapshot.child("fleet")
                     val fleetList = mutableListOf<SavedShip>()
 
@@ -331,14 +305,13 @@ class UserRepository(
                         fleetList.add(ship)
                     }
 
-                    // 5) Overwrite local state
+                    clearAllLocalData()
                     userDao.insertUser(fetchedUser)
 
                     if (fleetList.isNotEmpty()) {
                         fleetDao.saveFleet(fleetList)
                     }
 
-                    // [ LOGIC ]: Start observing friends changes in real-time to populate local DB
                     observeFriendsLive(uid)
                 }
 
@@ -349,10 +322,6 @@ class UserRepository(
             }
         }
 
-    /**
-     * Attaches live listeners to each friend's profile to update names locally
-     * as soon as they change their username on their own account.
-     */
     fun observeFriendsLive(currentUserId: String) {
         if (currentFriendListener != null && currentFriendRef?.key == "friends" && currentFriendRef?.parent?.key == currentUserId)
             return
@@ -372,51 +341,59 @@ class UserRepository(
                     else
                         friendDao.deleteFriendsNotIn(activeFriendIds)
 
+                    val iterator = friendProfileListeners.iterator()
+                    while (iterator.hasNext()) {
+                        val entry = iterator.next()
+                        if (!activeFriendIds.contains(entry.key)) {
+                            database.getReference("users").child(entry.key).child("profile")
+                                .removeEventListener(entry.value)
+                            iterator.remove()
+                        }
+                    }
+
                     for (friendSnap in snapshot.children) {
                         val friendId = friendSnap.key ?: continue
+
+                        if (friendProfileListeners.containsKey(friendId)) continue
+
                         val status = friendSnap.child("status").getValue(String::class.java) ?: "ACCEPTED"
                         val timestamp = friendSnap.child("timestamp").getValue(Long::class.java) ?: 0L
 
-                        // [ LOGIC ]: Listen to the friend's official profile node to catch updates
-                        database.getReference("users")
-                            .child(friendId)
-                            .child("profile")
-                            .addValueEventListener(object : ValueEventListener {
-                                override fun onDataChange(profileSnapshot: DataSnapshot) {
-                                    if (!profileSnapshot.exists()) return
+                        val profileListener = object : ValueEventListener {
+                            override fun onDataChange(profileSnapshot: DataSnapshot) {
+                                if (!profileSnapshot.exists()) return
 
-                                    val info = profileSnapshot.child("info")
-                                    val stats = profileSnapshot.child("statistics")
+                                val info = profileSnapshot.child("info")
+                                val stats = profileSnapshot.child("statistics")
 
-                                    val name = info.child("name").getValue(String::class.java) ?: "Unknown"
-                                    val country = info.child("countryCode").getValue(String::class.java) ?: "IT"
-                                    val wins = stats.child("wins").getValue(Long::class.java)?.toInt() ?: 0
-                                    val losses = stats.child("losses").getValue(Long::class.java)?.toInt() ?: 0
+                                val name = info.child("name").getValue(String::class.java) ?: "Sailor"
+                                val country = info.child("countryCode").getValue(String::class.java) ?: "IT"
+                                val wins = stats.child("wins").getValue(Long::class.java)?.toInt() ?: 0
+                                val losses = stats.child("losses").getValue(Long::class.java)?.toInt() ?: 0
 
-                                    repositoryScope.launch {
-                                        val updatedFriend = FriendEntity(
-                                            id = friendId,
-                                            name = name,
-                                            status = status.uppercase(),
-                                            timestamp = timestamp,
-                                            countryCode = country,
-                                            wins = wins,
-                                            losses = losses
-                                        )
-
-                                        // [ LOGIC ]: Room INSERT handles the sync between Firebase and Local DB
-                                        friendDao.insertFriend(updatedFriend)
-                                        Log.d("UserRepository", "Friend data synced/updated live.")
-                                    }
+                                repositoryScope.launch {
+                                    val updatedFriend = FriendEntity(
+                                        id = friendId,
+                                        name = name,
+                                        status = status.uppercase(),
+                                        timestamp = timestamp,
+                                        countryCode = country,
+                                        wins = wins,
+                                        losses = losses
+                                    )
+                                    friendDao.insertFriend(updatedFriend)
                                 }
+                            }
+                            override fun onCancelled(error: DatabaseError) {}
+                        }
 
-                                override fun onCancelled(error: DatabaseError) {
-                                    Log.e("UserRepository", "Friend name listener cancelled: ${error.message}")
-                                }
-                            })
+                        database.getReference("users").child(friendId).child("profile")
+                            .addValueEventListener(profileListener)
+                        friendProfileListeners[friendId] = profileListener
                     }
                 }
             }
+
             override fun onCancelled(error: DatabaseError) {  }
         }
 
@@ -430,13 +407,15 @@ class UserRepository(
             currentFriendListener = null
             currentFriendRef = null
         }
+
+        friendProfileListeners.forEach { (friendId, listener) ->
+            database.getReference("users").child(friendId).child("profile").removeEventListener(listener)
+        }
+
+        friendProfileListeners.clear()
     }
 
-    /**
-     * Deletes the account and associated data from cloud and local storage.
-     */
     suspend fun deleteAccount(user: User): Result<String> {
-        // Check for integrity
         if (user.registerEmail.isNullOrEmpty() || user.password.isNullOrEmpty()) {
             return Result.failure(Exception("The account has not been registered yet, therefore it cannot be deleted."))
         }
@@ -445,15 +424,10 @@ class UserRepository(
             val firebaseUser = auth.currentUser ?: return Result.failure(Exception("No user is currently logged in."))
             val userRef = database.getReference("users").child(user.id)
 
-            // 1. Attempt re-authentication using the LOCALLY stored password
             val credential = EmailAuthProvider.getCredential(user.registerEmail, user.password)
 
-            // 2. This will throw an exception if the password has been changed externally
             firebaseUser.reauthenticate(credential).await()
 
-            // --- Authenticated successfully. Proceed with deletion. ---
-
-            // Remove friend references (Cloud)
             val friendsSnapshot = userRef.child("friends").get().await()
             if (friendsSnapshot.exists()) {
                 for (friend in friendsSnapshot.children) {
@@ -466,45 +440,33 @@ class UserRepository(
                 }
             }
 
-            // Remove User Data (Cloud)
             userRef.removeValue().await()
 
-            // Delete Auth Account (Cloud)
             firebaseUser.delete().await()
 
-            // Clear Local Data
             clearAllLocalData()
             auth.signOut()
 
             Result.success("Account deleted successfully.")
 
         } catch (e: FirebaseAuthInvalidCredentialsException) {
-            // [ NOTE ]: User reset password via email, but app has the old one locally.
-            // ERROR MESSAGE: Tells the user the credentials don't match anymore.
             return Result.failure(
                 Exception("The password have been changed externally. Please \"Access\" once more to verify your identity, then retry.")
             )
 
         } catch (e: FirebaseAuthRecentLoginRequiredException) {
-            // [ NOTE ]: Session is too old for sensitive actions.
-            // ERROR MESSAGE: Tells the user to refresh the session.
             return Result.failure(
                 Exception("For security reasons, this action requires a recent sign-in. Please \"Access\" once more to refresh the session.")
             )
 
         } catch (e: Exception) {
-            // Generic fallback
             e.printStackTrace()
             return Result.failure(Exception("Delete failed: ${e.message}"))
         }
     }
 
-    /**
-     * Establishes a bidirectional friendship between the sender and the target.
-     */
     suspend fun sendFriendRequest(sender: User, targetId: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // 1. Check if the target ID exists in Firebase
             val targetRef = database.getReference("users").child(targetId)
             val snapshot = targetRef.get().await()
 
@@ -512,12 +474,9 @@ class UserRepository(
                 return@withContext Result.failure(Exception("Player's ID '$targetId' does not exist."))
             }
 
-            // 2. Get target details for the sender's list
             val targetName = snapshot.child("profile/info/name").getValue(String::class.java) ?: "Unknown Sailor"
             val timestamp = System.currentTimeMillis()
 
-            // 3. Write to Firebase (Sender's friend list -> Target ID)
-            // Status is "accepted" immediately.
             val friendDataForSender = mapOf(
                 "name" to targetName,
                 "status" to "accepted",
@@ -531,7 +490,6 @@ class UserRepository(
                 .setValue(friendDataForSender)
                 .await()
 
-            // 4. Write to Firebase (Target's friend list -> Sender ID) - Reciprocal
             val friendDataForTarget = mapOf(
                 "name" to sender.name,
                 "status" to "accepted",
@@ -545,7 +503,6 @@ class UserRepository(
                 .setValue(friendDataForTarget)
                 .await()
 
-            // 5. Save the friend locally in Room so it appears in the UI immediately
             val localFriend = FriendEntity(
                 id = targetId,
                 name = targetName,
@@ -561,13 +518,7 @@ class UserRepository(
         }
     }
 
-    /**
-     * Observes and returns the real-time leaderboard ranking from Firebase.
-     */
     fun getLeaderboard(): Flow<List<RankingPlayer>> = callbackFlow {
-        // 1. Point to the "users" node
-        // 2. Sort upon the "totalScore" parameter
-        // 3. Retrieve the last 25 (the higher amount of points is on the bottom)
         val query = database.getReference("users")
             .orderByChild("profile/ranking/totalScore")
             .limitToLast(25)
@@ -577,19 +528,17 @@ class UserRepository(
             override fun onDataChange(snapshot: DataSnapshot) {
                 val tempList = mutableListOf<RankingPlayer>()
 
-                // Firebase returns the data in ascending order (0 -> 100 -> 1000)
                 for (child in snapshot.children) {
                     val uid = child.key ?: ""
 
                     val name = child.child("profile/info/name").getValue(String::class.java)
-                        ?: child.child("name").getValue(String::class.java) // Fallback root
-                        ?: "Unknown Sailor"
+                        ?: child.child("name").getValue(String::class.java)
+                        ?: "Sailor"
 
                     val countryCode = child.child("profile/info/countryCode").getValue(String::class.java) ?: "IT"
                     val avatarUrl = child.child("profile/info/profilePictureUrl").getValue(String::class.java)
                     val scoreLong = child.child("profile/ranking/totalScore").getValue(Long::class.java) ?: 0L
 
-                    // Adjust the format removing commas (es. 10.000)
                     val formattedScore = String.format("%,d", scoreLong).replace(',', '.')
 
                     tempList.add(
@@ -620,9 +569,6 @@ class UserRepository(
         awaitClose { query.removeEventListener(listener) }
     }
 
-    /**
-     * Updates XP and match-related statistics for the specified user.
-     */
     private suspend fun updateUserStatistics(userId: String, isVictory: Boolean, shotsFired: Long, shotsHit: Long, shipsSunk: Int) {
         val user = userDao.getUserById(userId) ?: return
 
@@ -650,9 +596,6 @@ class UserRepository(
         syncLocalToCloud(userId)
     }
 
-    /**
-     * Records match history and statistics locally and triggers cloud synchronization.
-     */
     suspend fun saveMatchRecord(
         userId: String,
         opponentName: String,
@@ -688,9 +631,6 @@ class UserRepository(
         }
     }
 
-    /**
-     * Uploads the player's fleet configuration to the active match node in Firebase.
-     */
     suspend fun uploadFleetToMatch(matchId: String, userId: String) = withContext(Dispatchers.IO) {
         try {
             val localFleet = fleetDao.getUserFleet(userId)
@@ -724,9 +664,6 @@ class UserRepository(
         userDao.deleteAllUsers()
     }
 
-    /**
-     * Listens for the opponent's fleet to become available in the cloud match node.
-     */
     fun listenForOpponentFleet(matchId: String, opponentId: String): Flow<List<SavedShip>> = callbackFlow {
         val opponentFleetRef = database.getReference("matches")
             .child(matchId)

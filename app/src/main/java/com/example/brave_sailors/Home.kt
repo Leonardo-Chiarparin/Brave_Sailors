@@ -75,7 +75,6 @@ import com.example.brave_sailors.model.ProfileViewModelFactory
 import com.example.brave_sailors.model.RegisterUiState
 import com.example.brave_sailors.model.RegisterViewModel
 import com.example.brave_sailors.model.RegisterViewModelFactory
-import com.example.brave_sailors.ui.challenge.BilgeScreen
 import com.example.brave_sailors.ui.components.ActiveDialog
 import com.example.brave_sailors.ui.components.Arrow
 import com.example.brave_sailors.ui.components.DialogAccess
@@ -86,7 +85,6 @@ import com.example.brave_sailors.ui.components.DialogFlag
 import com.example.brave_sailors.ui.components.DialogFleetConfirm
 import com.example.brave_sailors.ui.components.DialogFriend
 import com.example.brave_sailors.ui.components.DialogInstructions
-import com.example.brave_sailors.ui.components.DialogLoading
 import com.example.brave_sailors.ui.components.DialogName
 import com.example.brave_sailors.ui.components.DialogPassword
 import com.example.brave_sailors.ui.components.DialogRegister
@@ -113,7 +111,6 @@ enum class OverlayHomeState {
     SHOWING_DETAILS,
     EXITING_DETAILS,
     SHOWING_LOBBY,
-    LOADING_MATCH,
     SHOWING_GUEST_FLEET,
     EXITING_GUEST_FLEET,
     PLAYING_VS_COMPUTER,
@@ -125,16 +122,16 @@ enum class OverlayHomeState {
 @Composable
 fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: ProfileViewModel, onRestart: () -> Unit) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope() // Scope to launch clearCredentialState
+    val coroutineScope = rememberCoroutineScope()
     
     var currentScreen by remember { mutableStateOf(NavigationItem.Home) }
 
     var isContentVisible by remember { mutableStateOf(false) }
 
-    // -- DIALOG STATE --
     var activeDialog by remember { mutableStateOf<ActiveDialog>(ActiveDialog.None) }
 
-    // -- NAVIGATION STATE --
+    var isDeleting by remember { mutableStateOf(false) }
+
     var overlayChallengeState by remember { mutableStateOf(OverlayChallengeState.IDLE) }
     var targetChallengeState by remember { mutableStateOf(OverlayChallengeState.IDLE) }
 
@@ -147,16 +144,13 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
     var overlayHomeState by remember { mutableStateOf(OverlayHomeState.IDLE) }
     var targetHomeState by remember { mutableStateOf(OverlayHomeState.IDLE) }
 
-    // -- MATCH SETTINGS --
     var chosenGameModeIndex by remember { mutableIntStateOf(0) }
     var chosenDifficulty: String? by remember { mutableStateOf("Normal") }
     var chosenFiringRule by remember { mutableStateOf("Chain attacks") }
 
-    // [ LOGIC ]: State to hold the chosen opponent for the online match
     var selectedOpponent by remember { mutableStateOf<LobbyPlayer?>(null) }
     var activeMatchId by remember { mutableStateOf<String?>(null) }
 
-    // --- DEPENDENCIES & VIEW MODELS ---
     val db = remember { AppDatabase.getDatabase(context) }
     val api = RetrofitClient.api
 
@@ -165,14 +159,12 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
     val registerViewModel: RegisterViewModel = viewModel(factory = RegisterViewModelFactory(repository))
     val profileViewModel: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(db.userDao(), db.fleetDao(), repository))
 
-    // -- USER DATA --
     val uiStateAS = registerViewModel.uiState
 
     val scale = RememberScaleConversion()
 
     var showGooglePopup by remember { mutableStateOf(false) }
 
-    // -- USER AND FLAGS --
     val flagList = viewModel.flagList.collectAsState()
     val userState = viewModel.userState.collectAsState()
 
@@ -185,7 +177,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
     val forceLogout by viewModel.forceLogoutEvent.collectAsState()
 
     BackPress {
-        // It returns true if an overlay is present ( consuming the event and going back to the previous screen ), conversely the app will be minimized ( suspended in background )
         if (activeDialog != ActiveDialog.None) {
             when (val dialog = activeDialog) {
                 is ActiveDialog.Register,
@@ -279,7 +270,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
         isContentVisible = true
     }
 
-    // Security check: perform logout if session expires or conflicts are detected
     if (forceLogout) {
         LaunchedEffect(Unit) {
             viewModel.removeSessionListener()
@@ -314,6 +304,10 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
             }
 
             is RegisterUiState.Error -> {
+                if (activeDialog is ActiveDialog.Access) {
+                    viewModel.restoreSessionListener()
+                }
+
                 val source = when (activeDialog) {
                     is ActiveDialog.Register -> DialogSource.REGISTER
                     is ActiveDialog.Access -> DialogSource.ACCESS
@@ -399,7 +393,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
-                        // -- GAME MODE DETAILS --
                         AnimatedVisibility(
                             visible = overlayHomeState == OverlayHomeState.SHOWING_DETAILS,
                             enter = fadeIn(animationSpec = tween(300)),
@@ -430,7 +423,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
-                        // -- GUEST FLEET DEPLOYMENT --
                         AnimatedVisibility(
                             visible = overlayHomeState == OverlayHomeState.SHOWING_GUEST_FLEET,
                             enter = fadeIn(animationSpec = tween(300)),
@@ -450,9 +442,8 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
-                        // -- LOBBY --
                         AnimatedVisibility(
-                            visible = overlayHomeState == OverlayHomeState.SHOWING_LOBBY || overlayHomeState == OverlayHomeState.LOADING_MATCH,
+                            visible = overlayHomeState == OverlayHomeState.SHOWING_LOBBY,
                             enter = fadeIn(animationSpec = tween(300)),
                             exit = fadeOut(animationSpec = tween(200))
                         ) {
@@ -480,7 +471,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                         val context = LocalContext.current
                         val db = remember { AppDatabase.getDatabase(context) }
 
-                        // -- PLAYING VS COMPUTER --
                         AnimatedVisibility(
                             visible = overlayHomeState == OverlayHomeState.PLAYING_VS_COMPUTER,
                             enter = fadeIn(animationSpec = tween(300)),
@@ -502,7 +492,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
-                        // -- PLAYING VS GUEST --
                         AnimatedVisibility(
                             visible = overlayHomeState == OverlayHomeState.PLAYING_VS_GUEST,
                             enter = fadeIn(animationSpec = tween(300)),
@@ -522,7 +511,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
-                        // -- PLAYING VS FRIEND ( ONLINE ) --
                         AnimatedVisibility(
                             visible = overlayHomeState == OverlayHomeState.PLAYING_VS_FRIEND && selectedOpponent != null,
                             enter = fadeIn(animationSpec = tween(300)),
@@ -575,7 +563,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             onOpenFriends = { activeDialog = ActiveDialog.Friend }
                         )
 
-                        // -- STATISTICS --
                         if (overlayProfileState == OverlayProfileState.SHOWING_STATS) {
                             StatisticsScreen(
                                 user = entry,
@@ -583,7 +570,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
-                        // -- RANKINGS --
                         if (overlayProfileState == OverlayProfileState.SHOWING_RANKINGS && entry != null) {
                             RankingsScreen(
                                 user = entry,
@@ -708,7 +694,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             }
                         }
 
-                        // -- CHALLENGES MENU --
                         AnimatedVisibility(
                             visible = overlayChallengeState == OverlayChallengeState.IDLE,
                             enter = fadeIn(animationSpec = tween(300)),
@@ -731,7 +716,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
-                        // -- TORPEDO --
                         AnimatedVisibility(
                             visible = overlayChallengeState == OverlayChallengeState.SHOWING_TORPEDO,
                             enter = fadeIn(animationSpec = tween(300)),
@@ -740,7 +724,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             TorpedoScreen(
                                 onGameResult = { isWin ->
                                     if (isWin) {
-                                        // [ ACTION ]: Reward the player with XP and Score
                                         entry?.let { user ->
                                             profileViewModel.addMiniGameWinReward(user.id)
                                         }
@@ -750,7 +733,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
-                        // -- CARGO --
                         AnimatedVisibility(
                             visible = overlayChallengeState == OverlayChallengeState.SHOWING_CARGO,
                             enter = fadeIn(animationSpec = tween(300)),
@@ -768,7 +750,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                             )
                         }
 
-                        // -- BILGE --
                         AnimatedVisibility(
                             visible = overlayChallengeState == OverlayChallengeState.SHOWING_BILGE,
                             enter = fadeIn(animationSpec = tween(300)),
@@ -790,7 +771,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
             }
         }
 
-        // -- CUSTOM POPUP "WELCOME BACK" --
         if (showGooglePopup && entry != null) {
             Popup(
                 start = true,
@@ -867,11 +847,9 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
         }
     }
 
-    // -- DIALOGS HANDLER --
     when (val currentDialog = activeDialog) {
         is ActiveDialog.None -> {  }
 
-        // -- PROFILE DIALOGS --
         is ActiveDialog.Filter -> {
             DialogFilter(
                 imageUri = currentDialog.uri,
@@ -920,13 +898,23 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
             )
         }
 
-        // -- ACCOUNT DIALOGS --
         is ActiveDialog.Register -> {
+            val isLoading = uiStateAS is RegisterUiState.Loading
+
             DialogRegister(
-                onDismiss = { activeDialog = ActiveDialog.None; registerViewModel.resetState() },
+                onDismiss = {
+                    if (!isLoading) {
+                        activeDialog = ActiveDialog.None
+                        registerViewModel.resetState()
+                    }
+                },
                 onConfirm = { email, password, confirmPassword ->
+                    if (isLoading)
+                        return@DialogRegister
+
                     registerViewModel.register(email, password, confirmPassword)
-                }
+                },
+                isLoading = isLoading
             )
         }
 
@@ -934,8 +922,20 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
             val isLoading = uiStateAS is RegisterUiState.Loading
             
             DialogAccess(
-                onDismiss = { activeDialog = ActiveDialog.None; registerViewModel.resetState() },
-                onConfirm = { email, password -> registerViewModel.login(context, email, password) },
+                onDismiss = {
+                    if (!isLoading) {
+                        activeDialog = ActiveDialog.None
+                        registerViewModel.resetState()
+                    }
+                },
+                onConfirm = { email, password ->
+                    if (isLoading)
+                        return@DialogAccess
+
+                    viewModel.removeSessionListener()
+
+                    registerViewModel.login(context, email, password)
+                },
                 isLoading = isLoading
             )
         }
@@ -959,9 +959,16 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
         is ActiveDialog.DeleteAccount -> {
             if (entry != null) {
                 DialogDeleteAccount(
-                    onDismiss = { activeDialog = ActiveDialog.None },
+                    onDismiss = { if (!isDeleting) activeDialog = ActiveDialog.None },
                     onConfirm = {
+                        if (isDeleting)
+                            return@DialogDeleteAccount
+
+                        isDeleting = true
+
                         profileViewModel.deleteAccount(entry) { success, errorMessage ->
+                            isDeleting = false
+
                             if (success) {
                                 MatchStateStorage.clear(context)
 
@@ -986,12 +993,12 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
                                 )
                             }
                         }
-                    }
+                    },
+                    isLoading = isDeleting
                 )
             }
         }
 
-        // -- GAME OPTIONS DIALOGS --
         is ActiveDialog.AiFilter -> {
             DialogFilter(
                 imageUri = currentDialog.uri,
@@ -1003,14 +1010,12 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
             )
         }
 
-        // -- ARMADA DIALOGS --
         is ActiveDialog.Deployment -> {
             DialogFleetConfirm {
                 activeDialog = ActiveDialog.None
             }
         }
 
-        // -- SYSTEM / ERROR DIALOGS --
         is ActiveDialog.Error -> {
             DialogError(
                 errorMessage = currentDialog.message,
@@ -1034,27 +1039,10 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
         }
     }
 
-    // -- MenuScreen --
     if (overlayMenuState == OverlayMenuState.SHOWING_INSTRUCTIONS) {
         DialogInstructions(
             onDismiss = { overlayMenuState = OverlayMenuState.IDLE }
         )
-    }
-
-    // -- GameLobbyScreen --
-    if (overlayHomeState == OverlayHomeState.LOADING_MATCH) {
-        DialogLoading(
-            onDismiss = {
-                // [ TO - DO ]: Cancel the match request
-
-                overlayHomeState = OverlayHomeState.SHOWING_LOBBY
-            }
-        )
-
-        LaunchedEffect(Unit) {
-            delay(4500) // [ TO - DO ]: Change this value in order to wait until the match can be started ( min. 4500L * 2 as the Intro.kt radar )
-            overlayHomeState = OverlayHomeState.PLAYING_VS_FRIEND
-        }
     }
 }
 
@@ -1063,8 +1051,6 @@ fun HomeScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pro
 private fun Modal(
     onOpenGameModes: (Int) -> Unit
 ) {
-    // -- SCALE ( used for applying conversions ) --
-    // [ MEMO ]: Sizes are taken from 720 x 1600px mockup ( with 72dpi ) using the Redmi Note 10S
     val scale = RememberScaleConversion()
 
     val barHeight = 108f
@@ -1074,11 +1060,10 @@ private fun Modal(
     val stopDuration = animationDuration * 2.0f
 
     var currentMode by remember { mutableIntStateOf(0) }
-    var isMovingForward by remember { mutableStateOf(true) } // False -> Backward / Right, True -> Forward / Left
+    var isMovingForward by remember { mutableStateOf(true) }
 
     var isAnimating by remember { mutableStateOf(false) }
 
-    // -- GESTURES --
     var totalDragDistance by remember { mutableFloatStateOf(0f) }
     var hasSwitchedThisGesture by remember { mutableStateOf(false) }
 
@@ -1145,7 +1130,7 @@ private fun Modal(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = maxWidth) // [ MEMO ]: Remove it if not necessary
+                .widthIn(max = maxWidth)
                 .align(Alignment.TopCenter)
                 .padding(top = topOffset)
         ) {
@@ -1281,8 +1266,6 @@ private fun Modal(
                         paddingV = 16f,
                         text = targetMode.button,
                         onClick = {
-                            // [ TO - DO ]: Redirect the user according to the chosen mode
-                            // e.g., if (!isAnimating), if (currentMode.opponent == OpponentType.Search) { ... }
                             if (!isAnimating)
                                 onOpenGameModes(currentMode)
                         },

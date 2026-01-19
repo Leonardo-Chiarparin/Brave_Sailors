@@ -60,7 +60,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.brave_sailors.data.local.database.AppDatabase
-import com.example.brave_sailors.data.local.database.entity.User
 import com.example.brave_sailors.domain.use_case.GoogleSigningUseCase
 import com.example.brave_sailors.domain.use_case.OpenPrivacyPolicyUseCase
 import com.example.brave_sailors.domain.use_case.SigningResult
@@ -91,7 +90,6 @@ fun TermsScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pr
             .background(Color.Transparent)
             .padding(innerPadding)
     ) {
-        // Center area
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -110,20 +108,15 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
 
-    // -- SCALE ( used for applying conversions ) --
     val scale = RememberScaleConversion()
 
-    // [ MEMO ]: Sizes are taken from 720 x 1600px mockup ( with 72dpi ) using the Redmi Note 10S
-    val boxShape = CutCornerShape(scale.dp(24f)) // 24px
+    val boxShape = CutCornerShape(scale.dp(24f))
+    val maxWidth = scale.dp(646f)
 
-    val maxWidth = scale.dp(646f) // 646px, etc.
-
-    // -- STATE ( implemented to persist across recompositions ) --
     var privacyAccepted by rememberSaveable { mutableStateOf(false) }
     var privacyLaunched by rememberSaveable { mutableStateOf(false) }
     var showPopup by remember { mutableStateOf(false) }
 
-    // -- AUTHENTICATION --
     var isSignedIn by rememberSaveable { mutableStateOf(false) }
     var isSigningIn by remember { mutableStateOf(false) }
 
@@ -133,10 +126,8 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
     var playerName by remember { mutableStateOf("Sailor") }
     var playerPhoto by remember { mutableStateOf<String?>(null) }
 
-    // We hold the user object returned by login until "START" is pressed (for new users)
     var isNewUser by remember { mutableStateOf(false) }
 
-    // Detected Country State
     var detectedCountryCode by remember { mutableStateOf<String?>(null) }
 
     val openPrivacyPolicy = remember { OpenPrivacyPolicyUseCase() }
@@ -159,9 +150,11 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                 is SigningResult.Success -> {
                     val user = result.user
 
-                    val userWithCountry = if (detectedCountryCode != null) {
-                        user.copy(countryCode = detectedCountryCode!!)
-                    } else user
+                    val initialCountry = detectedCountryCode
+                        ?: user.countryCode.takeIf { !it.isNullOrBlank() }
+                        ?: "IT"
+
+                    val userWithCountry = user.copy(countryCode = initialCountry)
 
                     playerName = user.googleName
                     playerEmail = user.email
@@ -196,13 +189,12 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                     delay(500)
 
                     isSigningIn = false
-                    // restartApp(context)
+                    restartApp(context)
                 }
             }
         }
     }
 
-    // Location Permission
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -214,7 +206,7 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                 detectedCountryCode = countryCode.uppercase()
             }
         } else {
-            detectedCountryCode = "IT" // Fallback
+            detectedCountryCode = "IT"
         }
     }
 
@@ -246,7 +238,6 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
         }
     }
 
-    // [ NOTE ]: This block witnesses the app's state, keeping trace about the moment when it returns to foreground ( e.g., after the user reviews the "Privacy Policy" page )
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if ((event == Lifecycle.Event.ON_RESUME) && ((!privacyAccepted) && privacyLaunched))
@@ -361,7 +352,6 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
     ) {
         Box(
             modifier = Modifier
-                // borderStroke + ( HeaderTab's height / 2 ) = 2 + ( ( 32 + 32 + 32 ) / 2 ), also taking into account the size of its content
                 .padding(top = scale.dp(50f))
                 .fillMaxWidth()
                 .background(DarkBlue, shape = boxShape)
@@ -390,7 +380,7 @@ private fun Modal(viewModel: ProfileViewModel, onStartApp: () -> Unit) {
                         Spacer(modifier = Modifier.height(scale.dp(146f)))
 
                         Text(
-                            text = "To use this service, users must review the application's terms first. Minors have to obtain permission from their parents or legal guardians.",
+                            text = "To use this service, users must review the application's terms first. Minors have to obtain permission from their parents or guardians.",
                             color = White,
                             textAlign = TextAlign.Center,
                             fontSize = scale.sp(28f),

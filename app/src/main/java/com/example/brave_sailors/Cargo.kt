@@ -37,7 +37,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.brave_sailors.model.minigame.CargoViewModel
 import com.example.brave_sailors.ui.components.DialogChallengeResult
 import com.example.brave_sailors.ui.components.GridBackground
-import com.example.brave_sailors.ui.minigame.TorpedoStatus
+import com.example.brave_sailors.model.minigame.TorpedoStatus
 import com.example.brave_sailors.ui.theme.DarkGrey
 import com.example.brave_sailors.ui.theme.DeepBlue
 import com.example.brave_sailors.ui.theme.Orange
@@ -54,7 +54,6 @@ fun CargoScreen(viewModel: CargoViewModel = viewModel(), onGameResult: (Boolean)
     var tiltX by remember { mutableFloatStateOf(0f) }
     var tiltY by remember { mutableFloatStateOf(0f) }
 
-    // [ LOGIC ]: Lock orientation and listen to accelerometer sensors
     DisposableEffect(Unit) {
         val activity = context.findActivity()
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
@@ -73,7 +72,6 @@ fun CargoScreen(viewModel: CargoViewModel = viewModel(), onGameResult: (Boolean)
         }
     }
 
-    // [ LOGIC ]: Main game loop execution
     LaunchedEffect(uiState.status) {
         if (uiState.status == TorpedoStatus.RUNNING) {
             while (true) {
@@ -85,31 +83,25 @@ fun CargoScreen(viewModel: CargoViewModel = viewModel(), onGameResult: (Boolean)
 
     Box(modifier = Modifier.fillMaxSize().background(DeepBlue)
         .onGloballyPositioned {
-            // Only init if we haven't started yet to prevent ghost restarts
             if (uiState.status == TorpedoStatus.WAITING_FOR_SIZE) {
                 viewModel.initGame(it.size.width.toFloat(), it.size.height.toFloat())
             }
         }
     ) {
-        // STYLE: Consistent grid background behind the action
         GridBackground(Modifier.matchParentSize(), color = DarkGrey, 14f)
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             if (uiState.status != TorpedoStatus.WAITING_FOR_SIZE) {
-                // 1. FLOOR LIGHTING
                 drawRect(Brush.radialGradient(listOf(Color(0xFF2C2C2C), Color(0xFF121212)), uiState.screenCenter, size.height))
 
-                // 2. TARGET ZONE INDICATOR
                 drawCircle(Orange.copy(0.3f), uiState.shipRadius, uiState.screenCenter, style = Stroke(8f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(30f, 20f))))
 
-                // 3. CARGO CRATE RENDERING
                 val cSize = 80f
                 val topLeft = uiState.cargoPos - Offset(40f, 40f)
                 drawOval(Color.Black.copy(0.3f), topLeft + Offset(10f, 10f), Size(cSize, cSize / 2))
                 drawRoundRect(Color(0xFFFF8F00), topLeft, Size(cSize, cSize), CornerRadius(8f))
                 drawRoundRect(Color(0xFFBF360C), topLeft, Size(cSize, cSize), CornerRadius(8f), style = Stroke(4f))
 
-                // 4. CANNONBALLS (Always on top with glow effect)
                 uiState.cannonballs.forEach { ball ->
                     drawCircle(Color.Red.copy(0.5f), ball.radius + 6f, ball.pos)
                     drawCircle(
@@ -125,7 +117,6 @@ fun CargoScreen(viewModel: CargoViewModel = viewModel(), onGameResult: (Boolean)
             Text("${uiState.elapsedTime}s", color = White, fontSize = scale.sp(40f), fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopCenter).padding(top = 60.dp))
         }
 
-        // Win or Loss Dialog (Both now wait for user interaction)
         if (uiState.status == TorpedoStatus.WON || uiState.status == TorpedoStatus.LOST) {
             val isWin = uiState.status == TorpedoStatus.WON
 
@@ -134,9 +125,7 @@ fun CargoScreen(viewModel: CargoViewModel = viewModel(), onGameResult: (Boolean)
                 time = null,
                 buttonText = if (isWin) "HONOR" else "ABORT",
                 onConfirm = {
-                    // [ ACTION ]: Update XP and close the overlay
                     onGameResult(isWin)
-                    // [ FIX ]: Silent reset to ensure fresh start on next entry
                     viewModel.resetGame()
                 },
                 onRetry = { viewModel.resetGame() }

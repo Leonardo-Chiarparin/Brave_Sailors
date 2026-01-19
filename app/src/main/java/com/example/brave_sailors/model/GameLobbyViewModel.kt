@@ -29,7 +29,6 @@ class GameLobbyViewModel(
     private val userDao: UserDao,
     private val friendDao: FriendDao
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(LobbyUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -65,7 +64,6 @@ class GameLobbyViewModel(
         }
     }
 
-    // [ UPDATE ]: Added 'myRule' parameter to enforce game mode matching
     fun onSelectOpponent(player: LobbyPlayer, myRule: String) {
         viewModelScope.launch {
             val user = userDao.getCurrentUser() ?: return@launch
@@ -83,11 +81,11 @@ class GameLobbyViewModel(
 
             _uiState.update { it.copy(isMatching = true, selectedOpponent = player) }
 
-            // [ LOGIC ]: Write NOT ONLY timestamp, but also the RULE
             val myData = mapOf(
                 "timestamp" to now,
                 "rule" to myRule
             )
+
             dbRef.child(baseId).child(myId).setValue(myData)
 
             matchmakingListener = object : ValueEventListener {
@@ -96,24 +94,18 @@ class GameLobbyViewModel(
 
                     var isOpponentReady = false
 
-                    // 1. Check Timestamp Freshness
                     val timestamp = opponentNode.child("timestamp").getValue(Long::class.java)
                     if (timestamp != null && abs(now - timestamp) < READY_TIMEOUT_MS) {
 
-                        // 2. [ CRITICAL ]: Check if Rules Match
                         val opponentRule = opponentNode.child("rule").getValue(String::class.java)
                         if (opponentRule == myRule) {
                             isOpponentReady = true
                         } else {
-                            // Logic: Opponent is ready but with DIFFERENT rule.
-                            // We do NOT set isOpponentReady = true. We stay waiting.
-                            // You could expose an error state here like "Mismatch rules"
                             Log.w("GameLobby", "Opponent ready but rules mismatch: Mine=$myRule vs Theirs=$opponentRule")
                         }
                     }
 
                     if (isOpponentReady) {
-                        // I AM HOST Logic
                         if (myId < opponentId) {
                             if (!snapshot.hasChild("gameId")) {
                                 val uniqueGameId = "${baseId}_${System.currentTimeMillis()}"
@@ -131,7 +123,6 @@ class GameLobbyViewModel(
                                     activeMatchId = gameId
                                 )
                             }
-                            // Cleanup my entry
                             dbRef.child(baseId).child(myId).removeValue()
                             removeMatchmakingListener()
                         }

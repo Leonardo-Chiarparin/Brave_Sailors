@@ -29,7 +29,6 @@ import kotlin.collections.forEach
 import kotlin.math.cos
 import kotlin.math.sin
 
-// [ TO - DO ]: If necessary, generalize the "Radar" function by adding some parameters that refer to the size of each visual element
 @Composable
 fun Radar(modifier: Modifier) {
     val density = LocalDensity.current
@@ -49,7 +48,7 @@ fun Radar(modifier: Modifier) {
         label = "RadarAngle"
     )
 
-    val gapBetweenCircles = with(density){ scale.dp(14f).toPx() } // blips' radius * 2f
+    val gapBetweenCircles = with(density){ scale.dp(14f).toPx() }
     val fixedOffset = with(density) { scale.dp(7f).toPx() }
 
     BoxWithConstraints(modifier = modifier) {
@@ -87,7 +86,6 @@ fun DrawRadar(angle: Float, blips: List<RadarBlip>, innerRadius: Float, outerRad
         val coneDegrees = 48f
         val sweepFactor = coneDegrees / 360f
 
-        // Outer circle
         drawCircle(
             color = Grey,
             radius = outerRadius,
@@ -95,7 +93,6 @@ fun DrawRadar(angle: Float, blips: List<RadarBlip>, innerRadius: Float, outerRad
             style = Stroke(scale.dp(3f).toPx())
         )
 
-        // Inner section
         rotate(degrees = -angle, pivot = center) {
             val gap = scale.dp(18f).toPx()
 
@@ -122,7 +119,6 @@ fun DrawRadar(angle: Float, blips: List<RadarBlip>, innerRadius: Float, outerRad
             }
         }
 
-        // Radar ( with a 60-degree cone )
         rotate(degrees = (angle - 90f) - coneDegrees, pivot = center) {
             drawArc(
                 brush = Brush.sweepGradient(
@@ -142,7 +138,6 @@ fun DrawRadar(angle: Float, blips: List<RadarBlip>, innerRadius: Float, outerRad
             )
         }
 
-        // Blips
         fun normalizeAngle(ang: Float): Float = (ang % 360f + 360f) % 360f
 
         val currentHeadAngle = normalizeAngle(angle - 90f)

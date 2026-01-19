@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// --- UI STATE FOR 2-PLAYER LOCAL MATCH ---
 data class MatchGuestUiState(
     val playerUser: User? = null,
     val isPlayer1Turn: Boolean = true,

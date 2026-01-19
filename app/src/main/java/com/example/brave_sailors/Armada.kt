@@ -476,7 +476,6 @@ private fun Modal(db: AppDatabase, repository: UserRepository, onConfirm: () -> 
             }
         }
 
-        // --- GHOST SHIP OVERLAY (DRAGGING) ---
         if (dragState.isDragging && dragState.draggedShipSize > 0) {
             val shipSize = dragState.draggedShipSize
             val offsetPx = dragState.currentDragOffset

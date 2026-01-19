@@ -5,7 +5,6 @@ import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.POST
 
-// --- DATA MODELS ---
 data class GridRequest(
     val grid: List<List<Int>>,
     val difficulty: String
@@ -16,13 +15,11 @@ data class AiMoveResponse(
     val col: Int
 )
 
-// --- INTERFACE ---
 interface AiService {
     @POST("/predict")
     suspend fun getNextMove(@Body request: GridRequest): AiMoveResponse
 }
 
-// --- CLIENT ---
 object AiNetworkClient {
 
     private const val BASE_URL = "https://battleship-brain-101333280904.europe-west1.run.app/"

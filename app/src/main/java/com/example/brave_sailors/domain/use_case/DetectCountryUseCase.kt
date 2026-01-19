@@ -18,9 +18,13 @@ fun detectCountryFromLocation(context: Context, onCountryFound: (String) -> Unit
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
     val cancelTokenSource = CancellationTokenSource()
 
+    fun handleFailure() {
+        onCountryFound("IT")
+    }
+
     fusedLocationClient.lastLocation.addOnSuccessListener { location ->
         if (location != null) {
-            decodeAndNotify(context, location, onCountryFound)
+            decodeAndNotify(context, location, onCountryFound) { handleFailure() }
         } else {
             val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val priority = if (hasFine) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY
@@ -28,41 +32,38 @@ fun detectCountryFromLocation(context: Context, onCountryFound: (String) -> Unit
             fusedLocationClient.getCurrentLocation(priority, cancelTokenSource.token)
                 .addOnSuccessListener { newLocation ->
                     if (newLocation != null) {
-                        decodeAndNotify(context, newLocation, onCountryFound)
+                        decodeAndNotify(context, newLocation, onCountryFound) { handleFailure() }
+                    } else {
+                        handleFailure()
                     }
                 }
-                .addOnFailureListener {
-                    it.printStackTrace()
-                }
+                .addOnFailureListener { handleFailure() }
         }
-    }.addOnFailureListener {
-        it.printStackTrace()
-    }
+    }.addOnFailureListener { handleFailure() }
 }
 
-fun decodeAndNotify(context: Context, location: Location, onCountryFound: (String) -> Unit) {
+fun decodeAndNotify(context: Context, location: Location, onCountryFound: (String) -> Unit, onError: () -> Unit) {
     try {
         val geocoder = Geocoder(context, Locale.getDefault())
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             geocoder.getFromLocation(location.latitude, location.longitude, 1) { addresses ->
-                if (addresses.isNotEmpty()) {
-                    val countryCode = addresses[0].countryCode
-
-                    if (countryCode != null)
-                        onCountryFound(countryCode.uppercase())
+                if (addresses.isNotEmpty() && addresses[0].countryCode != null) {
+                    onCountryFound(addresses[0].countryCode.uppercase())
+                } else {
+                    onError()
                 }
             }
         } else {
             @Suppress("DEPRECATION")
             val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-            if (!addresses.isNullOrEmpty()) {
-                val countryCode = addresses[0].countryCode
-
-                if (countryCode != null)
-                    onCountryFound(countryCode.uppercase())
+            if (!addresses.isNullOrEmpty() && addresses[0].countryCode != null) {
+                onCountryFound(addresses[0].countryCode.uppercase())
+            } else {
+                onError()
             }
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        onError()
     }
 }

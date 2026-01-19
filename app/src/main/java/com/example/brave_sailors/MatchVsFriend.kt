@@ -95,7 +95,6 @@ fun MatchVsFriendScreen(
 ) {
     val context = LocalContext.current
 
-    // [ LOGIC ]: Setup Repository for ViewModel
     val repository = remember {
         UserRepository(
             RetrofitClient.api,
@@ -110,7 +109,6 @@ fun MatchVsFriendScreen(
         factory = MatchVsFriendViewModelFactory(context, db.userDao(), db.fleetDao(), repository)
     )
 
-    // [ LOGIC ]: Initialize match with the unique ID
     LaunchedEffect(Unit) {
         viewModel.initializeMatch(opponent, firingRule, matchId)
 
@@ -160,7 +158,6 @@ private fun Modal(
     var showRetireDialog by remember { mutableStateOf(false) }
     var showResultDialog by remember { mutableStateOf(false) }
 
-    // [ LOGIC ]: Handle Back Button (treat as retire/loss)
     BackHandler {
         if (!uiState.isGameOver) {
             showRetireDialog = true
@@ -169,12 +166,10 @@ private fun Modal(
         }
     }
 
-    // [ LOGIC ]: Show Result Dialog when Game Over
     LaunchedEffect(uiState.isGameOver) {
         if (uiState.isGameOver) showResultDialog = true
     }
 
-    // [ UI ]: Retire Button Animation State
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val bgColor by animateColorAsState(targetValue = if (isPressed) Orange.copy(alpha = 0.75f) else Orange.copy(alpha = 0.90f), label = "BtnColor")
@@ -195,7 +190,6 @@ private fun Modal(
         ) {
             Spacer(modifier = Modifier.height(scale.dp(74f)))
 
-            // --- RETIRE BUTTON ---
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -231,7 +225,6 @@ private fun Modal(
 
             Spacer(modifier = Modifier.height(scale.dp(42f)))
 
-            // --- ANIMATED HEADER ---
             AnimatedContent(
                 targetState = uiState.isPlayerTurn,
                 transitionSpec = {
@@ -284,7 +277,6 @@ private fun Modal(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // -- FLEET STATUS --
                 val targetComposition = if (uiState.isPlayerTurn) uiState.enemyShipsComposition else uiState.playerShipsComposition
 
                 FleetStatus(
@@ -295,7 +287,6 @@ private fun Modal(
 
                 Spacer(modifier = Modifier.height(scale.dp(28f)))
 
-                // -- GAME GRID --
                 val gridToShow = if (uiState.isPlayerTurn) uiState.enemyGrid else uiState.playerGrid
                 val showShips = !uiState.isPlayerTurn || uiState.isGameOver
                 val isInteractable = uiState.isPlayerTurn && !uiState.isGameOver
@@ -309,7 +300,6 @@ private fun Modal(
             }
         }
 
-        // --- DIALOGS ---
         if (showRetireDialog) {
             DialogRetire(
                 onDismiss = { showRetireDialog = false },
@@ -352,7 +342,6 @@ private fun GameGridFriend(
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.Center
     ) {
-        // Y-Axis Labels (Numbers)
         Column(
             modifier = Modifier
                 .width(scale.dp(24f))
@@ -391,7 +380,6 @@ private fun GameGridFriend(
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // X-Axis Labels (Letters)
             Row(modifier = Modifier.padding(bottom = scale.dp(6f), start = scale.dp(2f))) {
                 val letters = ('A'..'H').toList()
                 for (i in 0 until gridSize) {
@@ -424,7 +412,6 @@ private fun GameGridFriend(
                 }
             }
 
-            // Grid Box
             Box(
                 modifier = Modifier
                     .padding(scale.dp(2f) / 2)
@@ -434,7 +421,6 @@ private fun GameGridFriend(
                         )
                     )
             ) {
-                // Actual Grid Content
                 Column {
                     for (row in 0 until gridSize) {
                         Row {

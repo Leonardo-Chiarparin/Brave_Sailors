@@ -1,4 +1,4 @@
-package com.example.brave_sailors.ui.minigame
+package com.example.brave_sailors.model.minigame
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -39,7 +39,6 @@ data class GameEntity(
 data class GameWall(val rect: Rect)
 
 class TorpedoGameViewModel : ViewModel() {
-
     private val _uiState = MutableStateFlow(TorpedoUiState())
     val uiState: StateFlow<TorpedoUiState> = _uiState.asStateFlow()
 
@@ -65,7 +64,6 @@ class TorpedoGameViewModel : ViewModel() {
         val wallThickness = 40f
         val gapSize = 280f
 
-        // Obstacle Generation
         val barriersY = listOf(height * 0.75f, height * 0.5f)
         barriersY.forEach { y ->
             val gapX = if (Random.nextBoolean()) width * 0.3f else width * 0.7f
@@ -181,7 +179,6 @@ class TorpedoGameViewModel : ViewModel() {
         val w = _uiState.value.screenWidth
         val h = _uiState.value.screenHeight
 
-        // Resetting to WAITING_FOR_SIZE forces initGame to re-generate barriers
         _uiState.value = TorpedoUiState(status = TorpedoStatus.WAITING_FOR_SIZE)
 
         if (w > 0 && h > 0) initGame(w, h)

@@ -51,7 +51,6 @@ fun Popup(
 
     LaunchedEffect(start) {
         if (start) {
-            // Reset upon starting
             animationProgress.snapTo(0f)
 
             animationProgress.animateTo(
@@ -72,17 +71,17 @@ fun Popup(
 
     val progress = animationProgress.value
 
-    val seg1Fin = 0.5f / 4.5f // Fade-in
-    val seg2Fin = 0.75f / 4.5f // Stability
-    val seg3Fin = 1.25f / 4.5f // Avatar's Growth
-    val seg4Fin = 1.5f / 4.5f // Stability
-    val seg5Fin = 2.0f / 4.5f // Expansion
-    val seg6Fin = 3.25f / 4.5f // Stability
-    val seg7Fin = 3.5f / 4.5f // Decreasing
-    val seg8Fin = 3.75f / 4.5f // Stability
-    val seg9Fin = 4.0f / 4.5f // Avatar's Reduction
-    val seg10Fin = 4.25f / 4.5f // Stability
-    val seg11Fin = 4.5f / 4.5f // Fade-out
+    val seg1Fin = 0.5f / 4.5f
+    val seg2Fin = 0.75f / 4.5f
+    val seg3Fin = 1.25f / 4.5f
+    val seg4Fin = 1.5f / 4.5f
+    val seg5Fin = 2.0f / 4.5f
+    val seg6Fin = 3.25f / 4.5f
+    val seg7Fin = 3.5f / 4.5f
+    val seg8Fin = 3.75f / 4.5f
+    val seg9Fin = 4.0f / 4.5f
+    val seg10Fin = 4.25f / 4.5f
+    val seg11Fin = 4.5f / 4.5f
 
     var alpha = 0f
 

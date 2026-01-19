@@ -33,15 +33,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.brave_sailors.ui.components.DialogChallengeResult
 import com.example.brave_sailors.ui.components.GridBackground
-import com.example.brave_sailors.ui.minigame.GameEntity
-import com.example.brave_sailors.ui.minigame.TorpedoGameViewModel
-import com.example.brave_sailors.ui.minigame.TorpedoStatus
+import com.example.brave_sailors.model.minigame.GameEntity
+import com.example.brave_sailors.model.minigame.TorpedoGameViewModel
+import com.example.brave_sailors.model.minigame.TorpedoStatus
 import com.example.brave_sailors.ui.theme.DarkGrey
 import com.example.brave_sailors.ui.theme.DeepBlue
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
 import kotlinx.coroutines.android.awaitFrame
 
-// --- LOCAL MINIGAME COLORS ---
 private val SeaTop = Color(0xFF006994)
 private val SeaBottom = Color(0xFF001e3b)
 private val MetalDark = Color(0xFF2C3E50)
@@ -60,7 +59,6 @@ fun TorpedoScreen(
     val context = LocalContext.current
     val scale = RememberScaleConversion()
 
-    // Sensor handling for tilt movement
     var currentTiltX by remember { mutableFloatStateOf(0f) }
 
     DisposableEffect(Unit) {
@@ -76,7 +74,6 @@ fun TorpedoScreen(
         onDispose { sensorManager.unregisterListener(listener) }
     }
 
-    // Game loop synchronized with display refresh rate
     LaunchedEffect(uiState.status) {
         if (uiState.status == TorpedoStatus.RUNNING) {
             while (true) {
@@ -99,10 +96,8 @@ fun TorpedoScreen(
                 }
             }
     ) {
-        // Grid background behind the canvas
         GridBackground(modifier = Modifier.matchParentSize(), color = DarkGrey, 14f)
 
-        // Main Game Canvas
         Canvas(modifier = Modifier.fillMaxSize()) {
             if (uiState.status != TorpedoStatus.WAITING_FOR_SIZE) {
                 drawRect(Brush.verticalGradient(listOf(SeaTop.copy(0.7f), SeaBottom.copy(0.9f))))
@@ -116,7 +111,6 @@ fun TorpedoScreen(
             }
         }
 
-        // HUD - Time display during gameplay
         if (uiState.status == TorpedoStatus.RUNNING) {
             Text(
                 text = "TIME: ${uiState.elapsedTime}s",
@@ -128,7 +122,6 @@ fun TorpedoScreen(
             )
         }
 
-        // Results Overlay (Win or Loss)
         if (uiState.status == TorpedoStatus.WON || uiState.status == TorpedoStatus.LOST) {
             val isWin = uiState.status == TorpedoStatus.WON
 
@@ -137,9 +130,7 @@ fun TorpedoScreen(
                 time = uiState.elapsedTime,
                 buttonText = if (isWin) "HONOR" else "ABORT",
                 onConfirm = {
-                    // [ ACTION ]: Update XP and close the overlay
                     onGameResult(isWin)
-                    // [ FIX ]: Silent reset to ensure fresh start on next entry
                     viewModel.resetGame()
                 },
                 onRetry = { viewModel.resetGame() }

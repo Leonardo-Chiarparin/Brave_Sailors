@@ -2,25 +2,20 @@ package com.example.brave_sailors.model
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
 import com.example.brave_sailors.data.local.database.entity.SavedShip
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 class FleetGuestViewModel : ViewModel() {
-
     private val GRID_SIZE = 8
-    // Inventory for Guest
     val initialShipsToPlace = listOf(4, 3, 3, 2, 2, 2, 1, 1)
 
     private val _state = MutableStateFlow(FleetUiState())
     val state = _state.asStateFlow()
 
     init {
-        // Initialize with empty grid and full inventory
         _state.update {
             it.copy(
                 grid = emptyGrid(),
@@ -30,8 +25,6 @@ class FleetGuestViewModel : ViewModel() {
             )
         }
     }
-
-    // --- DRAG & DROP LOGIC (Identical to FleetViewModel but local) ---
 
     fun onDragStart(size: Int) {
         _state.update { it.copy(draggedShipSize = size) }
@@ -66,7 +59,7 @@ class FleetGuestViewModel : ViewModel() {
 
         if (isValidPlacement(row, col, size, horizontal)) {
             val newShip = FleetPlacedShip(
-                shipId = _state.value.placedShips.size + 100, // Fake ID
+                shipId = _state.value.placedShips.size + 100,
                 size = size,
                 row = row,
                 col = col,
@@ -92,8 +85,6 @@ class FleetGuestViewModel : ViewModel() {
         }
     }
 
-    // --- BUTTON ACTIONS ---
-
     fun onRotate() {
         val next = if (_state.value.currentOrientation == ShipOrientation.HORIZONTAL)
             ShipOrientation.VERTICAL else ShipOrientation.HORIZONTAL
@@ -112,7 +103,7 @@ class FleetGuestViewModel : ViewModel() {
     }
 
     fun autoPlaceFleet() {
-        onReset() // Clear first
+        onReset()
 
         val newPlacedShips = mutableListOf<FleetPlacedShip>()
         val occupiedCoordinates = mutableSetOf<Pair<Int, Int>>()
@@ -134,12 +125,13 @@ class FleetGuestViewModel : ViewModel() {
                         size = size,
                         isHorizontal = isHorizontal
                     ))
-                    // Mark coordinates
+
                     for (i in 0 until size) {
                         val r = if (isHorizontal) row else row + i
                         val c = if (isHorizontal) col + i else col
                         occupiedCoordinates.add(r to c)
                     }
+
                     placed = true
                 }
             }
@@ -155,15 +147,12 @@ class FleetGuestViewModel : ViewModel() {
         }
     }
 
-    // --- SUBMISSION ---
-
     fun submitGuestFleet(): Boolean {
         if (_state.value.shipsToPlace.isNotEmpty()) return false
 
-        // Convert UI ships to SavedShip format for the Game Engine
         val guestShips = _state.value.placedShips.mapIndexed { index, s ->
             SavedShip(
-                userId = "guest_p2", // Fake ID
+                userId = "guest_p2",
                 shipId = index + 1,
                 size = s.size,
                 row = s.row,
@@ -172,12 +161,9 @@ class FleetGuestViewModel : ViewModel() {
             )
         }
 
-        // Save to Singleton for the Match Screen to retrieve
         GuestDataHolder.p2Fleet = guestShips
         return true
     }
-
-    // --- HELPERS ---
 
     private fun rebuildGrid(ships: List<FleetPlacedShip>): List<List<Cell>> {
         val m = emptyGrid().map { it.toMutableList() }.toMutableList()
@@ -194,13 +180,12 @@ class FleetGuestViewModel : ViewModel() {
     }
 
     private fun isValidPlacement(row: Int, col: Int, size: Int, horizontal: Boolean): Boolean {
-        // Boundary
         for (i in 0 until size) {
             val r = if (horizontal) row else row + i
             val c = if (horizontal) col + i else col
             if (r !in 0 until GRID_SIZE || c !in 0 until GRID_SIZE) return false
         }
-        // Collision
+
         val newCoordinates = (0 until size).map {
             if (horizontal) row to col + it else row + it to col
         }.toSet()
@@ -227,7 +212,6 @@ class FleetGuestViewModel : ViewModel() {
     }
 }
 
-// Simple Factory since no dependencies needed
 class FleetGuestViewModelFactory : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

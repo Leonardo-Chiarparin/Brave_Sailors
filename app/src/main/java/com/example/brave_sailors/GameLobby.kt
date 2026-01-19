@@ -74,7 +74,6 @@ import com.example.brave_sailors.data.local.database.AppDatabase
 import com.example.brave_sailors.data.remote.api.Flag
 import com.example.brave_sailors.model.GameLobbyViewModel
 import com.example.brave_sailors.model.GameLobbyViewModelFactory
-import com.example.brave_sailors.model.ProfileViewModel
 import com.example.brave_sailors.ui.components.DialogLoading
 import com.example.brave_sailors.ui.components.GridBackground
 import com.example.brave_sailors.ui.theme.DarkGrey
@@ -83,7 +82,6 @@ import com.example.brave_sailors.ui.theme.Orange
 import com.example.brave_sailors.ui.theme.TransparentGrey
 import com.example.brave_sailors.ui.theme.White
 import com.example.brave_sailors.ui.utils.RememberScaleConversion
-import kotlinx.coroutines.delay
 
 data class LobbyPlayer(
     val id: String,
@@ -93,7 +91,6 @@ data class LobbyPlayer(
     val wins: Int = 0,
     val losses: Int = 0
 )
-
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

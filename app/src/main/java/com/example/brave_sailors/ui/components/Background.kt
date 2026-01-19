@@ -60,21 +60,18 @@ fun GridBackground(modifier: Modifier = Modifier, color: Color, dimension: Float
 fun MosaicBackground() {
     val bgColor = Color(0xFF001848)
 
-    // Type A: "Darker Rhombus"
     val darkFillBottom = Color(0xFF082C70)
     val darkFillTop = Color(0xFF143C7C)
 
     val darkBorderRight = Color(0xFF244888)
     val darkBorderLeft = Color(0xFF103272)
 
-    // Type B: "Lighter Rhombus"
     val lightFillTop = Color(0xFF204886)
     val lightFillBottom = Color(0xFF2A508C)
 
     val lightBorderRight = Color(0xFF346296)
     val lightBorderLeft = Color(0xFF18407E)
 
-    // -- SETTINGS --
     val density = LocalDensity.current
     val scale = RememberScaleConversion()
 

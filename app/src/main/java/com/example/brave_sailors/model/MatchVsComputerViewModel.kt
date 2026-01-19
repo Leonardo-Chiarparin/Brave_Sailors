@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
-// --- DATA MODELS ---
 data class GridCell(
     val row: Int,
     val col: Int,

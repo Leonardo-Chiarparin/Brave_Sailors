@@ -3,6 +3,7 @@ package com.example.brave_sailors
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -79,7 +80,6 @@ enum class OverlayProfileState {
 fun ProfileScreen(isVisible: Boolean, user: User?, availableFlags: List<Flag>, viewModel: ProfileViewModel, onGetPhoto: (Uri) -> Unit, onOpenChangeFlag: () -> Unit, onOpenChangeName: () -> Unit, onOpenStatistics: () -> Unit, onOpenRankings: () -> Unit, onOpenFriends: () -> Unit) {
     val context = LocalContext.current
 
-    // -- CAMERA LOGIC INTEGRATION START --
     val cropOptions = remember {
         CropImageContractOptions(
             uri = null,
@@ -147,7 +147,7 @@ private fun Modal(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = maxWidth) // [ MEMO ]: Remove it if not necessary
+                .widthIn(max = maxWidth)
                 .padding(top = scale.dp(208f))
         ) {
             Column(
@@ -360,7 +360,6 @@ private fun EditSection(
                     rememberAsyncImagePainter(
                         model = ImageRequest.Builder(context)
                             .data(user.profilePictureUrl)
-                            // Force refresh if timestamp changes
                             .setParameter("key", user.lastUpdated)
                             .build(),
                         error = painterResource(R.drawable.ic_avatar_placeholder)
@@ -370,7 +369,7 @@ private fun EditSection(
                 }
 
                 SixthButton(
-                    onClick = onOpenChangePhoto, // Opens the camera
+                    onClick = onOpenChangePhoto,
                     imagePainter = portraitPainter
                 )
             }

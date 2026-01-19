@@ -72,7 +72,6 @@ fun IntroScreen(innerPadding: PaddingValues = PaddingValues(0.dp), viewModel: Pr
             .background(Color.Transparent)
             .padding(innerPadding)
     ) {
-        // Center area
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -92,22 +91,12 @@ private fun Modal(viewModel: ProfileViewModel, onFinished: () -> Unit) {
         addOval(Rect(0f, 0f, size.width, size.height))
     }
 
-    // -- SCALE ( used for applying conversions )
     val scale = RememberScaleConversion()
 
-    val maxWidth = scale.dp(648f) // 648px, etc.
-
-    // Handling the Footer's textState ( . connect to server )
-    // The order of such sentences is:
-    // 0) . initialize social gaming network ( ? )
-    // 1) . connect to server
-    // 2) . retrieve data from server
-    // 3) . start up audio ( if we decide to implement such functionality )
-    // 4) . check consent and permissions
-    // 5) . starting
+    val maxWidth = scale.dp(648f)
 
     var statusText by remember { mutableStateOf(". connect to server") }
-    val radarDuration = 4500L * 2L // two times the duration taken by the radar to complete a turn
+    val radarDuration = 4500L * 2L
 
     BackPress { false }
 
@@ -139,7 +128,7 @@ private fun Modal(viewModel: ProfileViewModel, onFinished: () -> Unit) {
                 val request = ImageRequest.Builder(context)
                     .data(loadedUser.profilePictureUrl)
                     .build()
-                imageLoader.enqueue(request)
+                try { imageLoader.execute(request) } catch (e: Exception) {  }
             }
 
             val userFlag = loadedFlags.find { flag ->
@@ -155,7 +144,12 @@ private fun Modal(viewModel: ProfileViewModel, onFinished: () -> Unit) {
                 val request = ImageRequest.Builder(context)
                     .data(userFlag.flagUrl)
                     .build()
-                imageLoader.enqueue(request)
+
+                try {
+                    imageLoader.execute(request)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
 
             Pair(loadedUser, loadedFlags)
@@ -216,7 +210,8 @@ private fun Modal(viewModel: ProfileViewModel, onFinished: () -> Unit) {
                                 colors = listOf(
                                     Color.Transparent,
                                     Color.Black.copy(alpha = 0.25f),
-                                    Color.Black                                    ),
+                                    Color.Black
+                                ),
                                 center = center,
                                 radius = shadowRadius
                             )

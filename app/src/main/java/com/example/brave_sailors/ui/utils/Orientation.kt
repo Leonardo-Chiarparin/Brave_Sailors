@@ -1,5 +1,6 @@
 package com.example.brave_sailors.ui.utils
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -11,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 
+@SuppressLint("SourceLockedOrientationActivity")
 @Composable
 fun LockScreenOrientation(isPortrait: Boolean) {
     val context = LocalContext.current
@@ -24,7 +26,6 @@ fun LockScreenOrientation(isPortrait: Boolean) {
                 if((activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) && (activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT))
                     activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             }
-            // else { ... }
         }
     }
 
@@ -40,10 +41,8 @@ fun LockScreenOrientation(isPortrait: Boolean) {
                     return
 
                 val target = when {
-                    // Portrait
                     currentState.value && orientation in 165..195 -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
 
-                    // Reverse Portrait
                     currentState.value && orientation !in 16..344 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
                     else -> null

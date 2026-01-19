@@ -62,15 +62,13 @@ import kotlin.math.roundToInt
 fun FleetStatus(
     turn: Int,
     isPlayerTurn: Boolean,
-    shipsRemaining: Map<Int, Int>? = null // [ NOTE ]: The default value to null preserves the logic for setup pages.
+    shipsRemaining: Map<Int, Int>? = null
 ) {
     val scale = RememberScaleConversion()
 
     val boxShape = CutCornerShape(scale.dp(36f))
     val titleText = if (isPlayerTurn) "ENEMY FLEET" else "YOUR FLEET"
 
-    // Logic: If the map is passed (GameMode), then use its values.
-    // Otherwise (SetupMode), apply the hardcoded ones from the original design (2, 3, 2, 1).
     val count1 = shipsRemaining?.get(1) ?: 2
     val count2 = shipsRemaining?.get(2) ?: 3
     val count3 = shipsRemaining?.get(3) ?: 2
@@ -141,7 +139,6 @@ fun FleetStatus(
                             horizontalArrangement = Arrangement.spacedBy(scale.dp(10f)),
                             verticalAlignment = Alignment.Bottom
                         ) {
-                            // Ships having dimension equals to 1
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(scale.dp(6f))
@@ -168,7 +165,6 @@ fun FleetStatus(
                                 )
                             }
 
-                            // Ships having dimension equals to 2
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(scale.dp(6f))
@@ -195,7 +191,6 @@ fun FleetStatus(
                                 )
                             }
 
-                            // Ships having dimension equals to 3
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(scale.dp(6f))
@@ -222,7 +217,6 @@ fun FleetStatus(
                                 )
                             }
 
-                            // Ships with dimension equals to 4
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(scale.dp(6f))

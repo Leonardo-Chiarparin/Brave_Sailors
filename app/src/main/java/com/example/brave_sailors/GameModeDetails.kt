@@ -61,7 +61,6 @@ import com.example.brave_sailors.model.GameModeDetailsViewModel
 import com.example.brave_sailors.model.GameModeDetailsViewModelFactory
 import com.example.brave_sailors.ui.components.BackButton
 import com.example.brave_sailors.ui.components.ContinueButton
-import com.example.brave_sailors.ui.components.DialogDeployment
 import com.example.brave_sailors.ui.components.DialogDifficulty
 import com.example.brave_sailors.ui.components.DialogError
 import com.example.brave_sailors.ui.components.DialogFiringRules
@@ -73,9 +72,9 @@ import kotlinx.coroutines.launch
 @Composable
 fun GameModeDetailsScreen(
     db: AppDatabase,
-    gameModeIndex: Int, // 0 = Single player vs. computer, 1 = Player 1 vs. player 2 on the same device, 2 = Play with friends online vs. kith
+    gameModeIndex: Int,
     onBack: () -> Unit,
-    onContinue: (String?, String) -> Unit // difficulty ( it is relevant for option 0 ) and firing rule
+    onContinue: (String?, String) -> Unit
 ) {
     Modal(db, gameModeIndex, onBack, onContinue)
 }
@@ -92,7 +91,6 @@ private fun Modal(
 
     val bgColor = Color(0xFF26768E)
 
-    // ViewModel initialization
     val viewModel: GameModeDetailsViewModel = viewModel(
         factory = GameModeDetailsViewModelFactory(db.fleetDao(), db.userDao())
     )
@@ -109,7 +107,7 @@ private fun Modal(
 
     var showDialogErrorVsComputer by remember { mutableStateOf(false) }
     var showDialogErrorVsPlayer2 by remember { mutableStateOf(false) }
-    var showDialogErrorVsKith by remember { mutableStateOf(false) } // Kith coincides with the remote opponent
+    var showDialogErrorVsKith by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         buttonsVisible = true
@@ -123,18 +121,15 @@ private fun Modal(
         }
     }
 
-    // Centralized logic to validate the fleet
     fun validateAndContinue() {
         viewModel.validateFleetAndProceed(
             gameModeIndex = gameModeIndex,
             difficulty = difficulty,
             firingRule = firingRule,
             onFleetFound = { diff, rule ->
-                // The armada has been found. Proceed to the next page.
                 onContinue(diff, rule)
             },
             onFleetMissing = { mode ->
-                // Fleet not retrieved. Open the correct dialog.
                 when (mode) {
                     0 -> showDialogErrorVsComputer = true
                     1 -> showDialogErrorVsPlayer2 = true
@@ -153,7 +148,7 @@ private fun Modal(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .widthIn(max = maxWidth) // [ MEMO ]: Remove it if not necessary
+                .widthIn(max = maxWidth)
                 .padding(top = scale.dp(216f))
         ) {
             Column(
@@ -197,7 +192,6 @@ private fun Modal(
 
                 Spacer(modifier = Modifier.height(scale.dp(74f)))
 
-                // Show the difficulty selection only if the chosen mode is against the computer
                 if (gameModeIndex == 0) {
                     SettingsRow(
                         option = "DIFFICULTY",
@@ -245,7 +239,6 @@ private fun Modal(
                         enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
                         exit = slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(200)) + fadeOut(animationSpec = tween(200))
                     ) {
-                        // Single ContinueButton that calls the aforementioned validation
                         ContinueButton(
                             text = "Continue",
                             onClick = { validateAndContinue() }
@@ -255,7 +248,6 @@ private fun Modal(
             }
         }
 
-        // -- DIALOGS --
         if (showDialogDifficulty) {
             DialogDifficulty(
                 currentDifficulty = difficulty,
@@ -280,7 +272,6 @@ private fun Modal(
             )
         }
 
-        // -- Errors --
         if (showDialogErrorVsComputer) {
             DialogError(
                 errorMessage = "Armada could not be found.",

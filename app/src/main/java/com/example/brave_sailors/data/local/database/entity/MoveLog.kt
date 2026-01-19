@@ -24,5 +24,5 @@ data class MoveLog(
     val playerId: String,
     val row: Int,
     val col: Int,
-    val result: String // "HIT", "MISS", "SUNK"
+    val result: String
 )

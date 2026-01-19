@@ -87,8 +87,8 @@ val CrossRed = Color(0xFFE00814)
 fun MatchVsComputerScreen(
     db: AppDatabase,
     profileViewModel: ProfileViewModel,
-    difficulty: String, // such difficulty manages the AI's behavior ( using random search, DQN, etc. )
-    firingRule: String, // this parameter defines how many times a player has to shoot ( once, up to the opponent's remaining ships, until he/she hits something )
+    difficulty: String,
+    firingRule: String,
     user: User?,
     flag: Flag?,
     onRetire: () -> Unit,
@@ -96,7 +96,6 @@ fun MatchVsComputerScreen(
 ) {
     val context = LocalContext.current
 
-    // ViewModel initialization
     val repository = remember {
         UserRepository(
             RetrofitClient.api,
@@ -227,7 +226,7 @@ private fun Modal(
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
-                            enabled = !uiState.isGameOver, // it's always possible to give up ( for this case only, as well as the one related to the match via Lobby )
+                            enabled = !uiState.isGameOver,
                             onClick = { showDialogRetire = true }
                         ),
                     contentAlignment = Alignment.Center
@@ -306,7 +305,6 @@ private fun Modal(
 
                 Spacer(modifier = Modifier.height(scale.dp(28f)))
 
-                // Prepare the data for GameGrid()
                 val gridToShow = if (isPlayerTurn) uiState.aiGrid else uiState.playerGrid
                 val showShips = (!isPlayerTurn) || uiState.isGameOver
 
@@ -322,7 +320,6 @@ private fun Modal(
             }
         }
 
-        // --- DIALOGS ---
         if (showDialogRetire) {
             DialogRetire(
                 onDismiss = { showDialogRetire = false },
@@ -360,7 +357,6 @@ private fun GameGrid(
 
     val cellSize = scale.dp(64f)
 
-    // [ NOTE ]: The grid must have no open-close animation ( while being replaced across the turns depending on the current player )
     Row(
         modifier = Modifier
             .fillMaxWidth()

@@ -13,7 +13,6 @@ class GameModeDetailsViewModel(
     private val fleetDao: FleetDao,
     private val userDao: UserDao
 ) : ViewModel() {
-
     fun validateFleetAndProceed(
         gameModeIndex: Int,
         difficulty: String,
@@ -22,8 +21,6 @@ class GameModeDetailsViewModel(
         onFleetMissing: (Int) -> Unit
     ) {
         viewModelScope.launch {
-            // 1. Retrieve the user from the LOCAL DB instead of directly from Firebase.
-            // This ensures we use the same ID with which the fleet was saved.
             val localUser = withContext(Dispatchers.IO) {
                 userDao.getCurrentUser()
             }
@@ -35,13 +32,9 @@ class GameModeDetailsViewModel(
 
             val userId = localUser.id
 
-            // 2. Check the fleet
             val fleet = withContext(Dispatchers.IO) {
                 fleetDao.getUserFleet(userId)
             }
-
-            // Debug log to understand what is happening (optional)
-            // Log.d("FleetCheck", "User: $userId, Ships found: ${fleet.size}")
 
             if (fleet.isNotEmpty()) {
                 when (gameModeIndex) {
@@ -55,7 +48,6 @@ class GameModeDetailsViewModel(
     }
 }
 
-// Update the Factory
 class GameModeDetailsViewModelFactory(
     private val fleetDao: FleetDao,
     private val userDao: UserDao

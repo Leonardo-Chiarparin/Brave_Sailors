@@ -55,8 +55,6 @@ fun MenuScreen(onOpenGameOptions: () -> Unit, onOpenAccountSettings: () -> Unit,
 
 @Composable
 private fun Modal(onOpenGameOptions: () -> Unit, onOpenAccountSettings: () -> Unit, onOpenInstructions: () -> Unit) {
-    // -- SCALE ( used for applying conversions ) --
-    // [ MEMO ]: Sizes are taken from 720 x 1600px mockup ( with 72dpi ) using the Redmi Note 10S
     val scale = RememberScaleConversion()
 
     val maxWidth = scale.dp(720f)

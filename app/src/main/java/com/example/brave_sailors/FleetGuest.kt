@@ -100,7 +100,6 @@ private fun Modal(
 
     val maxWidth = scale.dp(720f)
 
-    // ViewModel initialization
     val viewModel: FleetGuestViewModel = viewModel(
         factory = FleetGuestViewModelFactory()
     )
@@ -249,7 +248,6 @@ private fun Modal(
                                 }
                                 .size(cellSize * GRID_SIZE)
                         ) {
-                            // -- PREVIEW --
                             val preview = state.placementPreview
 
                             if (preview != null) {
@@ -282,7 +280,6 @@ private fun Modal(
                                 }
                             }
 
-                            // -- PLACEMENT --
                             state.placedShips.forEach { ship ->
                                 ShipDrawing(ship, cellSize)
                             }
@@ -479,7 +476,6 @@ private fun Modal(
             }
         }
 
-        // --- GHOST SHIP OVERLAY (WHILE DRAGGING) ---
         if (dragState.isDragging && dragState.draggedShipSize > 0) {
             val shipSize = dragState.draggedShipSize
             val offsetPx = dragState.currentDragOffset
@@ -511,7 +507,6 @@ private fun Modal(
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 
-        // -- DIALOGS --
         if (showDialogDeployment) {
             DialogDeployment(
                 onConfirm = {

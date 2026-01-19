@@ -17,16 +17,14 @@ import kotlinx.coroutines.launch
 
 sealed class FleetUiEvent {
     data class Message(val text: String) : FleetUiEvent()
-    // Added a specific event for navigation/success if needed
     object SaveSuccess : FleetUiEvent()
 }
 
 class FleetViewModel(
     private val userDao: UserDao,
     private val fleetDao: FleetDao,
-    private val userRepository: UserRepository // <--- 1. Added Repository dependency
+    private val userRepository: UserRepository
 ) : ViewModel() {
-
     private val GRID_SIZE = 8
     val initialShipsToPlace = listOf(4, 3, 3, 2, 2, 2, 1, 1)
 
@@ -89,8 +87,6 @@ class FleetViewModel(
         }
     }
 
-    // --- DRAG AND DROP LOGIC ---
-
     fun onDragStart(size: Int) {
         _state.update { it.copy(draggedShipSize = size) }
     }
@@ -126,7 +122,7 @@ class FleetViewModel(
 
         if (isValidPlacement(row, col, size, horizontal)) {
             val newShip = FleetPlacedShip(
-                shipId = _state.value.placedShips.size, // Simple ID generation
+                shipId = _state.value.placedShips.size,
                 size = size,
                 row = row,
                 col = col,
@@ -154,14 +150,12 @@ class FleetViewModel(
     }
 
     private fun isValidPlacement(row: Int, col: Int, size: Int, horizontal: Boolean): Boolean {
-        // A. Boundary Check
         for (i in 0 until size) {
             val r = if (horizontal) row else row + i
             val c = if (horizontal) col + i else col
             if (r !in 0 until GRID_SIZE || c !in 0 until GRID_SIZE) return false
         }
 
-        // B. Collisions
         val newShipCoordinates = mutableSetOf<Pair<Int, Int>>()
         for (i in 0 until size) {
             val r = if (horizontal) row else row + i
@@ -184,7 +178,6 @@ class FleetViewModel(
             ShipOrientation.VERTICAL else ShipOrientation.HORIZONTAL
         _state.update { it.copy(currentOrientation = next) }
 
-        // Refresh preview immediately if dragging
         val preview = _state.value.placementPreview
         val currentSize = _state.value.draggedShipSize
         if (preview != null && preview.coordinates.isNotEmpty() && currentSize != null) {
@@ -219,13 +212,7 @@ class FleetViewModel(
         return m.map { it.toList() }
     }
 
-    // --- AUTO PLACEMENT LOGIC ---
-
     fun autoPlaceFleet() {
-        // Don't auto-place if we are already saved (prevent accidental overwrite)
-        // OR remove this check if you want the "Auto" button to work always as a reset+randomize
-        // if (_state.value.isSaved) return
-
         val shipsToDistribute = initialShipsToPlace
         val newPlacedShips = mutableListOf<FleetPlacedShip>()
         val occupiedCoordinates = mutableSetOf<Pair<Int, Int>>()
@@ -259,7 +246,6 @@ class FleetViewModel(
             }
         }
 
-        // -- 2. Rebuild Grid for UI updates --
         val newGrid = rebuildGrid(newPlacedShips)
 
         _state.update {
@@ -277,14 +263,12 @@ class FleetViewModel(
         r: Int, c: Int, size: Int, isHorizontal: Boolean,
         occupied: Set<Pair<Int, Int>>, gridSize: Int
     ): Boolean {
-        // 1. Boundary Check
         if (isHorizontal) {
             if (c + size > gridSize) return false
         } else {
             if (r + size > gridSize) return false
         }
 
-        // 2. Overlap Check
         for (i in 0 until size) {
             val checkR = if (isHorizontal) r else r + i
             val checkC = if (isHorizontal) c + i else c
@@ -293,9 +277,6 @@ class FleetViewModel(
         return true
     }
 
-    // --- SAVE LOGIC ---
-
-    // <--- 3. FIX: Consolidated Save Logic --->
     fun saveFleetToDb() {
         viewModelScope.launch(Dispatchers.IO) {
             val user = userDao.getCurrentUser()
@@ -309,7 +290,6 @@ class FleetViewModel(
                 return@launch
             }
 
-            // 1. Prepare Data
             val shipsToSave = _state.value.placedShips.map { s ->
                 SavedShip(
                     userId = user.id,
@@ -321,24 +301,20 @@ class FleetViewModel(
                 )
             }
 
-            // 2. Save Local
             fleetDao.replaceUserFleet(user.id, shipsToSave)
 
-            // 3. Sync Cloud (Now works because Repository is injected)
             try {
                 userRepository.syncLocalToCloud(user.id)
                 _state.update { it.copy(isSaved = true) }
                 _events.emit(FleetUiEvent.SaveSuccess)
             } catch (e: Exception) {
                 _events.emit(FleetUiEvent.Message("Saved locally, but cloud sync failed."))
-                // Still mark as saved locally
                 _state.update { it.copy(isSaved = true) }
             }
         }
     }
 }
 
-// <--- 4. Updated Factory --->
 class FleetViewModelFactory(
     private val u: UserDao,
     private val f: FleetDao,

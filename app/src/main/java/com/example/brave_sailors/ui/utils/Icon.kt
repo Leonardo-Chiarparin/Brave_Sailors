@@ -18,12 +18,10 @@ import androidx.compose.ui.Modifier
 import com.example.brave_sailors.ui.theme.LightGrey
 import com.example.brave_sailors.ui.theme.White
 
-// -- DATA STRUCTURES ( regarding the game modes ) --
-// [ TO - DO ]: Add the remaining ones according to the application's purpose
 enum class OpponentType {
-    Computer,   // Single Player
-    Human,      // Local Multiplayer
-    Search      // Lobby
+    Computer,
+    Human,
+    Search
 }
 
 data class Mode(

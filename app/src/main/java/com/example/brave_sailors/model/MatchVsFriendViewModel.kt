@@ -141,7 +141,7 @@ class MatchVsFriendViewModel(
 
     private fun endGame(
         isVictory: Boolean,
-        reason: String, // Es: "Online", "Timeout", "Surrender"
+        reason: String,
         winnerName: String
     ) {
         if (isProcessingGameEnd.getAndSet(true)) {
@@ -173,7 +173,6 @@ class MatchVsFriendViewModel(
         }
     }
 
-    // --- PRESENCE SYSTEM (Heartbeat & Watchdog) ---
     private fun startPresenceSystem(matchId: String, opponentId: String) {
         lastLocalReceiptTime = System.currentTimeMillis()
 
@@ -377,7 +376,6 @@ class MatchVsFriendViewModel(
         var resultString = "MISS"
 
         if (isHit) {
-            // We count how many pieces of the current ship are still intact. If there is exactly one ( that we are hitting in this moment ), then, after the shot, they will be 0 -> SUNK.
             val intactParts = state.enemyGrid.flatten().count {
                 it.shipId == targetCell.shipId && it.status == CellStatus.SHIP
             }
@@ -575,7 +573,6 @@ class MatchVsFriendViewModel(
         )
     }
 
-    // --- HELPERS ---
     private fun createEmptyGrid() = List(8) { r -> List(8) { c -> GridCell(r, c) } }
 
     private fun countShipsAlive(grid: List<List<GridCell>>): Int {

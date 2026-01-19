@@ -240,7 +240,6 @@ private fun ChallengeItem(
         topEnd = maxCornerSize
     )
 
-    // Formatting timer string for the locked state UI
     val timerString = remember(cooldownTime) {
         if (cooldownTime <= 0) "00:00"
         else {
@@ -298,7 +297,6 @@ private fun ChallengeItem(
                     )
                 )
 
-                // Show timer if it is still locked
                 if (isLocked) {
                     Text(
                         text = "Reloading: $timerString",

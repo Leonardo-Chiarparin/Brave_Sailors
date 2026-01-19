@@ -1,4 +1,4 @@
-package com.example.brave_sailors.ui.challenge
+package com.example.brave_sailors
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -49,7 +49,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.brave_sailors.model.minigame.BilgeViewModel
 import com.example.brave_sailors.ui.components.DialogChallengeResult
 import com.example.brave_sailors.ui.components.GridBackground
-import com.example.brave_sailors.ui.minigame.TorpedoStatus
+import com.example.brave_sailors.model.minigame.TorpedoStatus
 import com.example.brave_sailors.ui.theme.DarkGrey
 import com.example.brave_sailors.ui.theme.DeepBlue
 import com.example.brave_sailors.ui.theme.LightGrey
@@ -60,7 +60,6 @@ import com.example.brave_sailors.ui.utils.findActivity
 import kotlin.math.PI
 import kotlin.math.sin
 
-// --- LOCAL CHALLENGE COLORS ---
 private val WaterBlue = Color(0xFF006994)
 private val WaterDark = Color(0xFF00334E)
 private val AlarmRed = Color(0xFFFF0000)
@@ -76,7 +75,6 @@ fun BilgeScreen(
     val scale = RememberScaleConversion()
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
-    // --- HARDWARE & ORIENTATION LOCK ---
     DisposableEffect(Unit) {
         val activity = context.findActivity()
         val originalOrientation = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -110,8 +108,6 @@ fun BilgeScreen(
         }
     }
 
-
-    // --- ANIMATIONS ---
     val infiniteTransition = rememberInfiniteTransition(label = "bilge_fx")
     val alarmAlpha by infiniteTransition.animateFloat(
         initialValue = 0f, targetValue = 0.5f,
@@ -125,11 +121,8 @@ fun BilgeScreen(
     )
 
     Box(modifier = Modifier.fillMaxSize().background(DeepBlue)) {
-
-        // Background grid consistent with Torpedo and main UI
         GridBackground(modifier = Modifier.matchParentSize(), color = DarkGrey, 14f)
 
-        // --- DYNAMIC WATER RENDERING ---
         val waterFillHeight = screenHeight * uiState.waterLevel
 
         Canvas(modifier = Modifier.fillMaxWidth().height(waterFillHeight).align(Alignment.BottomCenter)) {
@@ -151,9 +144,7 @@ fun BilgeScreen(
             drawPath(path, Brush.verticalGradient(listOf(WaterBlue.copy(0.7f), WaterDark)))
         }
 
-        // --- HUD ---
         if (uiState.status == TorpedoStatus.RUNNING) {
-            // High-visibility Timer
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -171,7 +162,6 @@ fun BilgeScreen(
                 )
             }
 
-            // Gameplay Instructions
             Column(
                 modifier = Modifier.align(Alignment.Center).offset(y = scale.dp(-40f)),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -189,12 +179,10 @@ fun BilgeScreen(
             }
         }
 
-        // Critical Flood warning
         if (uiState.waterLevel > 0.75f && uiState.status == TorpedoStatus.RUNNING) {
             Box(modifier = Modifier.fillMaxSize().background(AlarmRed.copy(alpha = alarmAlpha)))
         }
 
-        // --- END GAME MODAL ---
         if (uiState.status == TorpedoStatus.WON || uiState.status == TorpedoStatus.LOST) {
             val isWin = uiState.status == TorpedoStatus.WON
 
@@ -203,9 +191,7 @@ fun BilgeScreen(
                 time = null,
                 buttonText = if (isWin) "HONOR" else "ABORT",
                 onConfirm = {
-                    // [ ACTION ]: Update XP and close the overlay
                     onGameResult(isWin)
-                    // [ FIX ]: Silent reset to ensure fresh start on next entry
                     viewModel.resetGame()
                 },
                 onRetry = { viewModel.resetGame() }

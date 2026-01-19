@@ -93,25 +93,20 @@ import com.example.brave_sailors.ui.utils.RememberScaleConversion
 sealed interface ActiveDialog {
     data object None: ActiveDialog
 
-    // Account Dialogs
     data object Register : ActiveDialog
     data object Access : ActiveDialog
     data class Password(val emailToPrefill: String) : ActiveDialog
     data object DeleteAccount : ActiveDialog
 
-    // Profile Dialogs
     data class Filter(val uri: Uri) : ActiveDialog
     data object Flag : ActiveDialog
     data object Name : ActiveDialog
     data object Friend : ActiveDialog
 
-    // Game Options Dialogs
     data class AiFilter(val uri: Uri) : ActiveDialog
 
-    // Armada Dialogs
     data object Deployment : ActiveDialog
 
-    // System / Errors
     data class Error(val message: String, val source: DialogSource) : ActiveDialog
 }
 
@@ -287,7 +282,6 @@ fun DialogFilter(
     val scale = RememberScaleConversion()
     val interactionSource = remember { MutableInteractionSource() }
 
-    // Logic for retrieving bitmap
     var originalBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(imageUri) {
@@ -771,14 +765,12 @@ fun DialogName(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
-    // -- SCALE ( used for applying conversions ) --
     val scale = RememberScaleConversion()
 
-    // [ MEMO ]: Sizes are taken from 720 x 1600px mockup ( with 72dpi ) using the Redmi Note 10S
-    val boxShape = CutCornerShape(scale.dp(24f)) // 24px
+    val boxShape = CutCornerShape(scale.dp(24f))
     val closeButtonShape = CutCornerShape(topEnd = scale.dp(24f), bottomStart = scale.dp(24f))
 
-    val maxWidth = scale.dp(646f) // 646px, etc.
+    val maxWidth = scale.dp(646f)
 
     var newName by remember(currentName) {
         mutableStateOf(
@@ -809,7 +801,6 @@ fun DialogName(
         ) {
             Box(
                 modifier = Modifier
-                    // borderStroke + ( HeaderTab's height / 2 ) = 2 + ( ( 32 + 32 + 32 ) / 2 ), also taking into account the size of its content
                     .padding(top = scale.dp(50f))
                     .fillMaxWidth()
                     .background(DarkBlue, shape = boxShape)
@@ -1000,7 +991,6 @@ fun DialogInstructions(
         ) {
             Box(
                 modifier = Modifier
-                    // borderStroke + ( HeaderTab's height / 2 ) = 2 + ( ( 32 + 32 + 32 ) / 2 ), also taking into account the size of its content
                     .padding(top = scale.dp(50f))
                     .fillMaxWidth()
                     .background(DarkBlue, shape = boxShape)
@@ -1025,11 +1015,10 @@ fun DialogInstructions(
                     ) {
                         Spacer(modifier = Modifier.height(scale.dp(66f)))
 
-                        // Start
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(scale.dp(1060f)) // ex. 322f
+                                .height(scale.dp(1060f))
                         ) {
                             CompositionLocalProvider(
                                 LocalOverscrollFactory provides null
@@ -1094,12 +1083,9 @@ fun DialogInstructions(
                                             )
                                         }
                                     }
-
-                                    // Remaining parts...
                                 }
                             }
                         }
-                        // End
 
                         Spacer(modifier = Modifier.height(scale.dp(18f)))
                     }
@@ -1287,7 +1273,8 @@ fun DialogPassword(
 @Composable
 fun DialogRegister(
     onDismiss: () -> Unit,
-    onConfirm: (String, String, String) -> Unit
+    onConfirm: (String, String, String) -> Unit,
+    isLoading: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val scale = RememberScaleConversion()
@@ -1606,7 +1593,7 @@ fun DialogRegister(
                                     }
                                 },
                                 modifier = Modifier,
-                                enabled = emailText.isNotBlank() &&
+                                enabled = !isLoading && emailText.isNotBlank() &&
                                         passwordText.isNotBlank() &&
                                         confirmPasswordText.isNotBlank()
                             )
@@ -1892,7 +1879,8 @@ fun DialogAccess(
 @Composable
 fun DialogDeleteAccount(
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
+    isLoading: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val scale = RememberScaleConversion()
@@ -1976,7 +1964,8 @@ fun DialogDeleteAccount(
                                     onConfirm()
                                     onDismiss()
                                 },
-                                modifier = Modifier
+                                modifier = Modifier,
+                                enabled = !isLoading
                             )
 
                             Spacer(modifier = Modifier.height(scale.dp(34f)))

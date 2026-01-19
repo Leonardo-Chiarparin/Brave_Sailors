@@ -14,7 +14,7 @@ fun BackPress(onOverlayCloseLogic: () -> Boolean) {
     val context = LocalContext.current
 
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
-    val doublePressInterval = 2000L // 2 seconds to confirm the operation
+    val doublePressInterval = 2000L
 
     BackHandler(enabled = true) {
         val overlayWasOpen = onOverlayCloseLogic()

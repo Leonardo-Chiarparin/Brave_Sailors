@@ -63,7 +63,6 @@ object NavigationConstants {
     const val TOTAL_DURATION = BAR_DURATION + CONTENT_DURATION
 }
 
-// [ TO - DO ]: Provide a name for the penultimate item
 enum class NavigationItem(
     val title: String,
     val icon: ImageVector,
@@ -76,7 +75,6 @@ enum class NavigationItem(
     Fleet("FLEET", Icons.Default.DirectionsBoat, textOnSelect = true),
 }
 
-// -- NAVIGATION BAR --
 @Composable
 fun NavigationBar(
     currentScreen: NavigationItem,

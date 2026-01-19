@@ -114,7 +114,6 @@ fun Profile(viewModel: ProfileViewModel) {
     val flagList = viewModel.flagList.collectAsState()
     val availableFlags = flagList.value
 
-    // [ NOTE ]: Observe the user's state to get dynamic statistics
     val user by viewModel.userState.collectAsState()
 
     val scale = RememberScaleConversion()
@@ -252,8 +251,6 @@ fun Profile(viewModel: ProfileViewModel) {
                                 rememberAsyncImagePainter(
                                     model = ImageRequest.Builder(LocalContext.current)
                                         .data(user?.profilePictureUrl)
-                                        .crossfade(true)
-                                        // Force refresh if timestamp changes
                                         .setParameter("key", user?.lastUpdated ?: System.currentTimeMillis())
                                         .build(),
                                     error = painterResource(R.drawable.ic_avatar_placeholder)
