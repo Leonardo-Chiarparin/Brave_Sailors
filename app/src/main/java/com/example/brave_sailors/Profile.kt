@@ -3,7 +3,6 @@ package com.example.brave_sailors
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
