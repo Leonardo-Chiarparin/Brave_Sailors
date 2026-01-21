@@ -167,7 +167,7 @@ private fun Modal(
                             item {
                                 ChallengeItem(
                                     title = "Stealth Mission: TORPEDO RUN",
-                                    description = if (isLocked) "Systems recharging..." else "Guide a depth charge using the gyroscope.",
+                                    description = if (isLocked) "Systems recharging..." else "Guide a depth charge using the accelerometer.",
                                     isExpanded = expandedIndexTorpedo == 0,
                                     icon = Icons.Default.Explore,
                                     isLocked = isLocked,
