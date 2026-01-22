@@ -69,13 +69,10 @@ private fun Modal(
     val closeButtonShape = CutCornerShape(bottomStart = scale.dp(34f))
 
     val currentXp = user?.currentXp ?: 0
-    val xpStep = 1000
+    val targetXp = 1000
 
-    val targetXp = ((currentXp / xpStep) + 1) * xpStep
-
-    val xpInCurrentLevel = currentXp % xpStep
-
-    val xpProgress = (xpInCurrentLevel.toFloat() / xpStep.toFloat()).coerceIn(0f, 1f)
+    val xpToDisplay = currentXp.coerceAtMost(1000)
+    val xpProgress = (currentXp.toFloat() / targetXp.toFloat()).coerceIn(0f, 1f)
 
     val rankTitle = when {
         currentXp >= 1000 -> "Grand Admiral"
@@ -216,7 +213,7 @@ private fun Modal(
                             Spacer(modifier = Modifier.height(scale.dp(14f)))
 
                             Text(
-                                text = "$currentXp / $targetXp",
+                                text = "$xpToDisplay / $targetXp",
                                 color = White,
                                 fontSize = scale.sp(22f),
                                 textAlign = TextAlign.Center,
