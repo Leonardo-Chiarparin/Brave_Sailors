@@ -507,21 +507,16 @@ class ProfileViewModel(
 
             val newXp = user.currentXp + 5
             val newTotalScore = user.totalScore + 5L
-            val now = System.currentTimeMillis()
 
-            var currentLevel = user.level
-            var adjustedXp = newXp
-            if (adjustedXp >= 100) {
-                currentLevel += 1
-                adjustedXp -= 100
-            }
+            val newLevel = (newXp / 100) + 1
 
             val updatedUser = user.copy(
-                level = currentLevel,
-                currentXp = adjustedXp,
+                level = newLevel,
+                currentXp = newXp,
                 totalScore = newTotalScore,
-                lastWinTimestamp = now
+                lastWinTimestamp = System.currentTimeMillis()
             )
+
             userDao.updateUser(updatedUser)
 
             userRepository.syncLocalToCloud(userId)
