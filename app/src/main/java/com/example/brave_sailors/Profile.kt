@@ -83,7 +83,7 @@ fun ProfileScreen(isVisible: Boolean, user: User?, availableFlags: List<Flag>, v
         CropImageContractOptions(
             uri = null,
             cropImageOptions = CropImageOptions(
-                imageSourceIncludeGallery = false,
+                imageSourceIncludeGallery = true,
                 imageSourceIncludeCamera = true,
                 guidelines = CropImageView.Guidelines.ON,
                 aspectRatioX = 1,

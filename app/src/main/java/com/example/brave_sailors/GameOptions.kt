@@ -108,7 +108,7 @@ private fun Modal(
         CropImageContractOptions(
             uri = null,
             cropImageOptions = CropImageOptions(
-                imageSourceIncludeGallery = false,
+                imageSourceIncludeGallery = true,
                 imageSourceIncludeCamera = true,
                 guidelines = CropImageView.Guidelines.ON,
                 aspectRatioX = 1,
